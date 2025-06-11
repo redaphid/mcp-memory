@@ -5,23 +5,36 @@
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev --experimental-vectorize-bind-to-prod",
+		"build": "npm run build:frontend && npm run build:backend",
+		"build:frontend": "vite build",
+		"build:backend": "tsc",
+		"dev:frontend": "vite",
 		"format": "biome format --write",
 		"lint:fix": "biome lint --fix",
 		"start": "wrangler dev",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"test": "node test-script.js"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250421.0",
 		"@types/node": "^22.14.1",
+		"@types/react": "^18.2.79",
+		"@types/react-dom": "^18.2.25",
 		"@types/uuid": "^10.0.0",
+		"@vitejs/plugin-react": "^4.2.1",
 		"typescript": "^5.5.2",
+		"vite": "^5.2.8",
 		"workers-mcp": "^0.1.0-3",
 		"wrangler": "^4.6.0"
 	},
 	"dependencies": {
+		"@hono/zod-openapi": "^0.19.8",
+		"@hono/swagger-ui": "^0.5.2",
 		"@modelcontextprotocol/sdk": "^1.7.0",
 		"agents": "^0.0.60",
 		"hono": "^4.7.4",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
 		"uuid": "^11.1.0",
 		"zod": "^3.24.2"
 	}

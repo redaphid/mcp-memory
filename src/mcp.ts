@@ -1,23 +1,45 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { McpAgent } from "agents/mcp";
+import { DurableMCP } from "workers-mcp";
 import { z } from "zod";
 import { storeMemoryInD1 } from "./utils/db";
 import { searchMemories, storeMemory } from "./utils/vectorize";
 import { version } from "../package.json";
 
 type MyMCPProps = {
-  namespace: string;      // e.g., "user:alice", "project:frontend", "all"
+  namespace: string;
   namespaceType: 'user' | 'project' | 'all';
 };
 
-export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
+export class MyMCP extends DurableMCP<MyMCPProps, Env> {
   server = new McpServer({
     name: "MCP Memory",
     version,
   });
 
   async init() {
-    const env = this.env as Env;
+    // Extract namespace info from the Durable Object ID name
+    const objectName = this.ctx.id.name || "";
+
+    let namespace = objectName;
+    let namespaceType: 'user' | 'project' | 'all' = 'all';
+
+    if (objectName.startsWith("user:")) {
+      namespaceType = 'user';
+    } else if (objectName.startsWith("project:")) {
+      namespaceType = 'project';
+    }
+
+    // Set props for this instance
+    this.props = {
+      namespace,
+      namespaceType
+    };
+
+    this.initializeTools();
+  }
+
+  private initializeTools() {
+    const env = this.env;
 
     this.server.tool(
       "addToMCPMemory",
@@ -28,7 +50,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
       4. Important project information, documentation, or code patterns should be preserved
 
       The memory will be stored in the current namespace (user, project, or organization-wide).
-      
+
       To automatically detect and use the project namespace for the current directory:
       1. First, check if we're in a git repository: git rev-parse --is-inside-work-tree
       2. If yes, get the remote URL: git config --get remote.origin.url
@@ -39,10 +61,10 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
          - Custom domain: git@custom.com:team/repo.git → repo
       4. Convert to project namespace: project:{extracted-name}
       5. Store memories with: addToMCPMemory after switching to project namespace
-      
+
       Example: If in /home/user/myproject with origin github.com/alice/myproject.git
       The namespace would be: project:myproject
-      
+
       This tool must be invoked through a function call - it is not a passive resource but an active storage mechanism.`,
       { thingToRemember: z.string().describe("No description") },
       async ({ thingToRemember }) => {
@@ -80,7 +102,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
       4. You need to verify if specific information exists in the current namespace
 
       The search is performed within the current namespace (user, project, or organization-wide).
-      
+
       To automatically detect and use the project namespace for the current directory:
       1. First, check if we're in a git repository: git rev-parse --is-inside-work-tree
       2. If yes, get the remote URL: git config --get remote.origin.url
@@ -90,12 +112,12 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
          - gitlab.com/user/repo.git → repo
          - Custom domain: git@custom.com:team/repo.git → repo
       4. Convert to project namespace: project:{extracted-name}
-      
+
       5. Search memories with: searchMCPMemory after switching to project namespace
-      
+
       Example: If in /home/user/myproject with origin github.com/alice/myproject.git
       The namespace would be: project:myproject
-      
+
       This tool must be explicitly invoked through a function call - it is not a passive resource but an active search mechanism.`,
       { informationToGet: z.string().describe("No description") },
       async ({ informationToGet }) => {

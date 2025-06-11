@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { swaggerUI } from "@hono/swagger-ui";
 import { MyMCP } from "./mcp";
 import { getAllMemoriesFromD1, initializeDatabase, deleteMemoryFromD1, updateMemoryInD1 } from "./utils/db";
 import { deleteVectorById, updateMemoryVector, searchMemories } from "./utils/vectorize";
@@ -24,6 +25,192 @@ app.use("*", async (c, next) => {
   }
   await next();
 });
+
+// Simple OpenAPI doc endpoint
+app.get("/doc", (c) => {
+  const openAPISpec = {
+    openapi: "3.0.0",
+    info: {
+      title: "MCP Memory API",
+      version: "1.0.0",
+      description: "Memory management system with vector search capabilities for AI assistants"
+    },
+    servers: [
+      {
+        url: c.req.url.replace(/\/doc.*$/, ""),
+        description: "Current server"
+      }
+    ],
+    paths: {
+      "/api/namespaces": {
+        get: {
+          summary: "Get available namespaces",
+          description: "Retrieve all available user and project namespaces",
+          tags: ["Namespaces"],
+          responses: {
+            "200": {
+              description: "Available namespaces",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      namespaces: {
+                        type: "object",
+                        properties: {
+                          users: { type: "array", items: { type: "string" } },
+                          projects: { type: "array", items: { type: "string" } },
+                          all: { type: "boolean" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/search": {
+        post: {
+          summary: "Search across multiple namespaces",
+          description: "Perform semantic search across selected namespaces",
+          tags: ["Search"],
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    query: { type: "string" },
+                    namespaces: { type: "array", items: { type: "string" } },
+                    dateFrom: { type: "string" },
+                    dateTo: { type: "string" }
+                  },
+                  required: ["query", "namespaces"]
+                }
+              }
+            }
+          },
+          responses: {
+            "200": {
+              description: "Search results",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      query: { type: "string" },
+                      results: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            namespace: { type: "string" },
+                            memories: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  id: { type: "string" },
+                                  content: { type: "string" },
+                                  score: { type: "number" }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/{namespaceType}/{namespaceId}/memories": {
+        get: {
+          summary: "Get memories for a namespace",
+          description: "Retrieve paginated memories for a specific namespace",
+          tags: ["Memories"],
+          parameters: [
+            {
+              name: "namespaceType",
+              in: "path",
+              required: true,
+              schema: { type: "string", enum: ["user", "project", "all"] }
+            },
+            {
+              name: "namespaceId",
+              in: "path",
+              required: true,
+              schema: { type: "string" }
+            },
+            {
+              name: "page",
+              in: "query",
+              schema: { type: "integer", default: 1 }
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 20 }
+            }
+          ],
+          responses: {
+            "200": {
+              description: "Memories retrieved successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      memories: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string" },
+                            content: { type: "string" },
+                            created_at: { type: "string" }
+                          }
+                        }
+                      },
+                      namespace: { type: "string" },
+                      pagination: {
+                        type: "object",
+                        properties: {
+                          page: { type: "integer" },
+                          limit: { type: "integer" },
+                          total: { type: "integer" },
+                          totalPages: { type: "integer" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    tags: [
+      { name: "Namespaces", description: "Namespace management" },
+      { name: "Search", description: "Memory search operations" },
+      { name: "Memories", description: "Memory CRUD operations" }
+    ]
+  };
+
+  return c.json(openAPISpec);
+});
+
+// Swagger UI
+app.get("/ui", swaggerUI({ url: "/doc" }));
 
 // index.html
 app.get("/", async (c) => await c.env.ASSETS.fetch(c.req.raw));
@@ -73,17 +260,17 @@ app.post("/api/search", async (c) => {
     }
 
     const results = [];
-    
+
     // Search each namespace
     for (const namespace of namespaces) {
       try {
         const memories = await searchMemories(query, namespace, c.env);
-        
+
         // If date filtering is requested, we'll need to fetch from D1 to get dates
         if (dateFrom || dateTo) {
           const dbMemories = await c.env.DB.prepare(`
-            SELECT id, created_at FROM memories 
-            WHERE namespace = ? 
+            SELECT id, created_at FROM memories
+            WHERE namespace = ?
             ${dateFrom ? "AND created_at >= ?" : ""}
             ${dateTo ? "AND created_at <= ?" : ""}
           `).bind(
@@ -91,9 +278,9 @@ app.post("/api/search", async (c) => {
             ...(dateFrom ? [dateFrom] : []),
             ...(dateTo ? [dateTo] : [])
           ).all();
-          
+
           const validIds = new Set((dbMemories.results || []).map((m: any) => m.id));
-          
+
           results.push({
             namespace,
             memories: memories.filter(m => validIds.has(m.id))
@@ -106,10 +293,10 @@ app.post("/api/search", async (c) => {
       }
     }
 
-    return c.json({ 
+    return c.json({
       success: true,
       query,
-      results 
+      results
     });
   } catch (error) {
     console.error("Error in multi-namespace search:", error);
@@ -122,7 +309,7 @@ app.get("/:namespaceType/:namespaceId/memories", async (c) => {
   const namespaceType = c.req.param("namespaceType");
   const namespaceId = c.req.param("namespaceId");
   const namespace = `${namespaceType}:${namespaceId}`;
-  
+
   // Pagination parameters
   const page = parseInt(c.req.query("page") || "1");
   const limit = parseInt(c.req.query("limit") || "20");
@@ -134,20 +321,20 @@ app.get("/:namespaceType/:namespaceId/memories", async (c) => {
     const countResult = await c.env.DB.prepare(
       "SELECT COUNT(*) as total FROM memories WHERE namespace = ?"
     ).bind(namespace).first();
-    
+
     const total = (countResult as any)?.total || 0;
-    
+
     // Get paginated results
     const orderBy = sortBy === "date" ? "created_at DESC" : "created_at DESC";
     const memories = await c.env.DB.prepare(
-      `SELECT id, content, created_at FROM memories 
-       WHERE namespace = ? 
+      `SELECT id, content, created_at FROM memories
+       WHERE namespace = ?
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     ).bind(namespace, limit, offset).all();
 
-    return c.json({ 
-      success: true, 
+    return c.json({
+      success: true,
       memories: memories.results,
       namespace,
       pagination: {
@@ -239,21 +426,21 @@ app.post("/search/:namespaceType/:namespaceId", async (c) => {
   const namespaceType = c.req.param("namespaceType");
   const namespaceId = c.req.param("namespaceId");
   const namespace = `${namespaceType}:${namespaceId}`;
-  
+
   try {
     const { query } = await c.req.json();
-    
+
     if (!query) {
       return c.json({ error: "Missing query parameter" }, 400);
     }
-    
+
     const memories = await searchMemories(query, namespace, c.env);
-    
-    return c.json({ 
+
+    return c.json({
       success: true,
       namespace,
       query,
-      memories 
+      memories
     });
   } catch (error) {
     console.error(`Error searching memories in namespace ${namespace}:`, error);
@@ -347,82 +534,61 @@ app.delete("/api/memories/:memoryId", async (c) => {
   }
 });
 
-// Mount handler for user namespace
-app.mount("/user/:userId", async (req, env, ctx) => {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/user\/([^\/]+)/);
-  const userId = match ? match[1] : null;
+// MCP SSE endpoint for user namespace
+app.all("/user/:userId/sse", async (c) => {
+  const userId = c.req.param("userId");
 
   if (!userId) {
-    return new Response("Bad Request: Could not extract userId from URL path", { status: 400 });
+    return c.json({ error: "Bad Request: Could not extract userId from URL path" }, 400);
   }
 
-  // Pass namespace info to the MCP agent
-  ctx.props = {
-    namespace: `user:${userId}`,
-    namespaceType: 'user' as const,
-  };
+  // Get Durable Object ID for this user namespace
+  const id = c.env.MCP_OBJECT.idFromName(`user:${userId}`);
+  const stub = c.env.MCP_OBJECT.get(id);
 
-  const response = await MyMCP.mount(`/user/${userId}/sse`).fetch(req, env, ctx);
-  if (response) {
-    return response;
-  }
-
-  return new Response("Not Found within MCP mount", { status: 404 });
+  // Forward the request to the Durable Object
+  return stub.fetch(c.req.raw);
 });
 
-// Mount handler for project namespace
-app.mount("/project/:projectId", async (req, env, ctx) => {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/project\/([^\/]+)/);
-  const projectId = match ? match[1] : null;
+// MCP SSE endpoint for project namespace
+app.all("/project/:projectId/sse", async (c) => {
+  const projectId = c.req.param("projectId");
 
   if (!projectId) {
-    return new Response("Bad Request: Could not extract projectId from URL path", { status: 400 });
+    return c.json({ error: "Bad Request: Could not extract projectId from URL path" }, 400);
   }
 
-  // Pass namespace info to the MCP agent
-  ctx.props = {
-    namespace: `project:${projectId}`,
-    namespaceType: 'project' as const,
-  };
+  // Get Durable Object ID for this project namespace
+  const id = c.env.MCP_OBJECT.idFromName(`project:${projectId}`);
+  const stub = c.env.MCP_OBJECT.get(id);
 
-  const response = await MyMCP.mount(`/project/${projectId}/sse`).fetch(req, env, ctx);
-  if (response) {
-    return response;
-  }
-
-  return new Response("Not Found within MCP mount", { status: 404 });
+  // Forward the request to the Durable Object
+  return stub.fetch(c.req.raw);
 });
 
-// Mount handler for organization-wide namespace (future feature)
-app.mount("/all", async (req, env, ctx) => {
-  // Pass namespace info to the MCP agent
-  ctx.props = {
-    namespace: 'all',
-    namespaceType: 'all' as const,
-  };
+// MCP SSE endpoint for organization-wide namespace
+app.all("/all/sse", async (c) => {
+  // Get Durable Object ID for the global namespace
+  const id = c.env.MCP_OBJECT.idFromName("all");
+  const stub = c.env.MCP_OBJECT.get(id);
 
-  const response = await MyMCP.mount("/all/sse").fetch(req, env, ctx);
-  if (response) {
-    return response;
-  }
-
-  return new Response("Not Found within MCP mount", { status: 404 });
+  // Forward the request to the Durable Object
+  return stub.fetch(c.req.raw);
 });
 
 // Legacy support - redirect old format to new user namespace
-app.mount("/:userId", async (req, env, ctx) => {
-  const url = new URL(req.url);
-  const pathSegments = url.pathname.split("/");
-  const userId = pathSegments[1];
-  
-  if (!userId || userId === 'user' || userId === 'project' || userId === 'all' || userId === 'api') {
-    return new Response("Not Found", { status: 404 });
+app.get("/:userId", async (c) => {
+  const userId = c.req.param("userId");
+
+  // Skip if it's a reserved path
+  if (!userId || userId === 'user' || userId === 'project' || userId === 'all' || userId === 'api' || userId === 'doc' || userId === 'ui') {
+    return c.notFound();
   }
 
   // Redirect to new user namespace format
-  return Response.redirect(`${url.origin}/user/${userId}${pathSegments.slice(2).join('/')}`, 301);
+  const url = new URL(c.req.url);
+  const newUrl = `${url.origin}/user/${userId}${url.pathname.substring(userId.length + 1)}`;
+  return c.redirect(newUrl, 301);
 });
 
 export default app;
