@@ -6,7 +6,8 @@ import { searchMemories, storeMemory } from "./utils/vectorize";
 import { version } from "../package.json";
 
 type MyMCPProps = {
-  userId: string;
+  namespace: string;      // e.g., "user:alice", "project:frontend", "all"
+  namespaceType: 'user' | 'project' | 'all';
 };
 
 export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
@@ -20,29 +21,29 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
 
     this.server.tool(
       "addToMCPMemory",
-      `This tool stores important user information in a persistent memory layer. Use it when:
+      `This tool stores important information in a persistent memory layer. Use it when:
       1. User explicitly asks to remember something ("remember this...")
       2. You detect significant user preferences, traits, or patterns worth preserving
       3. Technical details, examples, or emotional responses emerge that would be valuable in future interactions
+      4. Important project information, documentation, or code patterns should be preserved
 
-      Consider using this tool after each user message to build comprehensive context over time. The stored information
-      will be available in future sessions to provide personalized responses. THIS TOOL MUST BE INVOKED THROUGH
-      A FUNCTION CALL - IT IS NOT A PASSIVE RESOURCE BUT AN ACTIVE STORAGE MECHANISM THAT REQUIRES EXPLICIT INVOCATION.`,
+      The memory will be stored in the current namespace (user, project, or organization-wide).
+      This tool must be invoked through a function call - it is not a passive resource but an active storage mechanism.`,
       { thingToRemember: z.string().describe("No description") },
       async ({ thingToRemember }) => {
         try {
           // Store in Vectorize using the refactored function
-          const memoryId = await storeMemory(thingToRemember, this.props.userId, env);
+          const memoryId = await storeMemory(thingToRemember, this.props.namespace, env);
 
           // Also store content in D1 database
-          await storeMemoryInD1(thingToRemember, this.props.userId, env, memoryId);
+          await storeMemoryInD1(thingToRemember, this.props.namespace, env, memoryId);
 
           console.log(
-            `Memory stored successfully in Vectorize and D1 with ID: ${memoryId}, content: "${thingToRemember}"`
+            `Memory stored successfully in namespace '${this.props.namespace}' with ID: ${memoryId}, content: "${thingToRemember}"`
           );
 
           return {
-            content: [{ type: "text", text: "Remembered: " + thingToRemember }],
+            content: [{ type: "text", text: `Remembered in ${this.props.namespace}: ${thingToRemember}` }],
           };
         } catch (error) {
           console.error("Error storing memory:", error);
@@ -55,22 +56,23 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
 
     this.server.tool(
       "searchMCPMemory",
-      `This tool searches the user's persistent memory layer for relevant information, preferences, and past context.
+      `This tool searches the persistent memory layer for relevant information, preferences, and past context.
       It uses semantic matching to find connections between your query and stored memories, even when exact keywords don't match.
       Use this tool when:
       1. You need historical context about the user's preferences or past interactions
-      2. The user refers to something they previously mentioned or asked you to remember
-      3. You need to verify if specific information about the user exists in memory
+      2. You need to find project-specific information, documentation, or code patterns
+      3. The user refers to something they previously mentioned or asked you to remember
+      4. You need to verify if specific information exists in the current namespace
 
-      This tool must be explicitly invoked through a function call - it is not a passive resource but an active search mechanism.
-      Always consider searching memory when uncertain about user context or preferences.`,
+      The search is performed within the current namespace (user, project, or organization-wide).
+      This tool must be explicitly invoked through a function call - it is not a passive resource but an active search mechanism.`,
       { informationToGet: z.string().describe("No description") },
       async ({ informationToGet }) => {
         try {
-          console.log(`Searching with query: "${informationToGet}"`);
+          console.log(`Searching in namespace '${this.props.namespace}' with query: "${informationToGet}"`);
 
           // Use the refactored function to search memories
-          const memories = await searchMemories(informationToGet, this.props.userId, env);
+          const memories = await searchMemories(informationToGet, this.props.namespace, env);
 
           console.log(`Search returned ${memories.length} matches`);
 
@@ -80,14 +82,14 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                 {
                   type: "text",
                   text:
-                    "Found memories:\n" + memories.map((m) => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n"),
+                    `Found memories in ${this.props.namespace}:\n` + memories.map((m) => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n"),
                 },
               ],
             };
           }
 
           return {
-            content: [{ type: "text", text: "No relevant memories found." }],
+            content: [{ type: "text", text: `No relevant memories found in ${this.props.namespace}.` }],
           };
         } catch (error) {
           console.error("Error searching memories:", error);
