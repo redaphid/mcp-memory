@@ -28,6 +28,21 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
       4. Important project information, documentation, or code patterns should be preserved
 
       The memory will be stored in the current namespace (user, project, or organization-wide).
+      
+      To automatically detect and use the project namespace for the current directory:
+      1. First, check if we're in a git repository: git rev-parse --is-inside-work-tree
+      2. If yes, get the remote URL: git config --get remote.origin.url
+      3. Extract project name from URL patterns:
+         - SSH: git@github.com:owner/project.git → project
+         - HTTPS: https://github.com/owner/project.git → project
+         - gitlab.com/user/repo.git → repo
+         - Custom domain: git@custom.com:team/repo.git → repo
+      4. Convert to project namespace: project:{extracted-name}
+      5. Store memories with: addToMCPMemory after switching to project namespace
+      
+      Example: If in /home/user/myproject with origin github.com/alice/myproject.git
+      The namespace would be: project:myproject
+      
       This tool must be invoked through a function call - it is not a passive resource but an active storage mechanism.`,
       { thingToRemember: z.string().describe("No description") },
       async ({ thingToRemember }) => {
@@ -65,6 +80,22 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
       4. You need to verify if specific information exists in the current namespace
 
       The search is performed within the current namespace (user, project, or organization-wide).
+      
+      To automatically detect and use the project namespace for the current directory:
+      1. First, check if we're in a git repository: git rev-parse --is-inside-work-tree
+      2. If yes, get the remote URL: git config --get remote.origin.url
+      3. Extract project name from URL patterns:
+         - SSH: git@github.com:owner/project.git → project
+         - HTTPS: https://github.com/owner/project.git → project
+         - gitlab.com/user/repo.git → repo
+         - Custom domain: git@custom.com:team/repo.git → repo
+      4. Convert to project namespace: project:{extracted-name}
+      
+      5. Search memories with: searchMCPMemory after switching to project namespace
+      
+      Example: If in /home/user/myproject with origin github.com/alice/myproject.git
+      The namespace would be: project:myproject
+      
       This tool must be explicitly invoked through a function call - it is not a passive resource but an active search mechanism.`,
       { informationToGet: z.string().describe("No description") },
       async ({ informationToGet }) => {
