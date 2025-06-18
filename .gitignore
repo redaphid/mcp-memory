@@ -178,3 +178,4 @@ dist
 .wrangler/
 .cursor/mcp.json
 *.bak
+mcp-config.json
