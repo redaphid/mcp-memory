@@ -9,7 +9,7 @@ let isOracleActive = false;
 
 // Initialize UUID
 if (!userUuid) {
-  userUuid = crypto.randomUUID ? crypto.randomUUID() : 
+  userUuid = crypto.randomUUID ? crypto.randomUUID() :
     `cursed-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
   localStorage.setItem("mcpUserUuid", userUuid);
 }
@@ -21,7 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const currentOrigin = window.location.origin;
   const sseUrl = `${currentOrigin}/user/${userUuid}/sse`;
   sseUrlInput.value = sseUrl;
-  
+
   // Copy button functionality
   document.getElementById("copy-button").addEventListener("click", () => {
     navigator.clipboard.writeText(sseUrl).then(() => {
@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => { btn.textContent = "📜 Seal Pact"; }, 2000);
     });
   });
-  
+
   // Coin slot functionality
   document.getElementById("insert-coin").addEventListener("click", () => {
     if (!isOracleActive) {
@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
       showFortune("The Oracle is already awake... Do not anger it further.");
     }
   });
-  
+
   // Select all namespaces
   document.getElementById("select-all-namespaces").addEventListener("click", () => {
     document.querySelectorAll("#namespace-tokens button").forEach(btn => {
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.classList.add("opacity-100", "glow");
     });
   });
-  
+
   // Clear namespaces
   document.getElementById("clear-namespaces").addEventListener("click", () => {
     selectedNamespaces.clear();
@@ -59,24 +59,39 @@ document.addEventListener("DOMContentLoaded", () => {
       btn.classList.remove("opacity-100", "glow");
     });
   });
-  
+
   // Oracle consultation
   document.getElementById("consult-oracle").addEventListener("click", consultOracle);
   document.getElementById("oracle-query").addEventListener("keypress", (e) => {
     if (e.key === "Enter") consultOracle();
   });
-  
+
   // Tab functionality
   document.querySelectorAll(".tab-button").forEach(btn => {
     btn.addEventListener("click", () => {
       switchToTab(btn.dataset.tab);
     });
   });
-  
+
   // Load more button
   document.getElementById("load-more").addEventListener("click", () => {
     currentPage++;
     loadMemories(true);
+  });
+
+  // Initialize search all button
+  document.getElementById("search-all").addEventListener("click", () => {
+    selectedNamespaces.clear();
+    selectedNamespaces.add("all");
+    document.getElementById("oracle-query").focus();
+
+    // Update UI to show we're searching all
+    const namespaceTokens = document.getElementById("namespace-tokens");
+    namespaceTokens.innerHTML = `
+      <button class="mystical-token px-3 py-1 rounded-md text-sm font-bold bg-purple-900/50 text-purple-300 opacity-100 glow">
+        🌐 All Realms
+      </button>
+    `;
   });
 });
 
@@ -97,7 +112,7 @@ function getTimeAgo(date) {
     hour: 3600,
     minute: 60
   };
-  
+
   for (const [unit, secondsInUnit] of Object.entries(intervals)) {
     const interval = Math.floor(seconds / secondsInUnit);
     if (interval >= 1) {
@@ -110,10 +125,10 @@ function getTimeAgo(date) {
 function showFortune(message) {
   const fortuneOutput = document.getElementById("fortune-output");
   const fortuneText = document.getElementById("fortune-text");
-  
+
   fortuneText.textContent = message;
   fortuneOutput.classList.remove("hidden");
-  
+
   setTimeout(() => {
     fortuneOutput.classList.add("hidden");
   }, 5000);
@@ -122,22 +137,22 @@ function showFortune(message) {
 // Activate the Oracle
 function activateOracle() {
   isOracleActive = true;
-  
+
   // Show sections with animation
   document.getElementById("crystal-ball-section").classList.remove("hidden");
   document.getElementById("tabs-section").classList.remove("hidden");
   document.getElementById("memories-display").classList.remove("hidden");
-  
+
   // Shake effect
   document.getElementById("insert-coin").classList.add("shake");
   setTimeout(() => {
     document.getElementById("insert-coin").classList.remove("shake");
   }, 500);
-  
+
   // Load namespaces and memories
   loadNamespaces();
   loadMemories();
-  
+
   showFortune("The Oracle awakens... What forbidden knowledge do you seek?");
 }
 
@@ -146,26 +161,26 @@ async function loadNamespaces() {
   try {
     const response = await fetch("/api/namespaces");
     const data = await response.json();
-    
+
     if (data.success) {
       const container = document.getElementById("namespace-tokens");
       container.innerHTML = "";
-      
+
       // Add user namespaces
       data.namespaces.users.forEach(user => {
         addNamespaceToken("user", user, container);
       });
-      
+
       // Add project namespaces
       data.namespaces.projects.forEach(project => {
         addNamespaceToken("project", project, container);
       });
-      
+
       // Add "all" if available
       if (data.namespaces.all) {
         addNamespaceToken("all", "all", container);
       }
-      
+
       // Auto-select current user
       const userToken = document.querySelector(`[data-namespace="user:${userUuid}"]`);
       if (userToken) {
@@ -183,10 +198,10 @@ function addNamespaceToken(type, id, container) {
   const token = document.createElement("button");
   token.className = "mystical-token px-4 py-2 rounded-full text-sm font-bold transition-all opacity-60";
   token.dataset.namespace = type === "all" ? "all" : `${type}:${id}`;
-  
+
   const icon = type === "user" ? "👤" : type === "project" ? "📁" : "🌐";
   token.textContent = `${icon} ${id}`;
-  
+
   token.addEventListener("click", () => {
     const namespace = token.dataset.namespace;
     if (selectedNamespaces.has(namespace)) {
@@ -199,7 +214,7 @@ function addNamespaceToken(type, id, container) {
       token.classList.add("opacity-100", "glow");
     }
   });
-  
+
   container.appendChild(token);
 }
 
@@ -210,27 +225,28 @@ async function consultOracle() {
     showFortune("The Oracle demands a question... Do not waste its time.");
     return;
   }
-  
+
   if (selectedNamespaces.size === 0) {
     showFortune("Choose a realm first, mortal... The Oracle cannot see into nothingness.");
     return;
   }
-  
+
   // Decrement wishes
   wishesRemaining--;
   document.querySelector("#wishes-counter .blood-text").textContent = wishesRemaining;
-  
+
   if (wishesRemaining === 0) {
     showFortune("Your wishes are spent... The Oracle grows silent. Refresh to bargain again.");
   }
-  
+
   // Show loading state
   const btn = document.getElementById("consult-oracle");
   btn.textContent = "👁️ Gazing...";
   btn.disabled = true;
-  
+
   try {
-    const response = await fetch("/api/search", {
+    const endpoint = selectedNamespaces.has("all") ? "/api/search-all" : "/api/search";
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -238,14 +254,14 @@ async function consultOracle() {
         namespaces: Array.from(selectedNamespaces)
       })
     });
-    
+
     const data = await response.json();
-    
+
     if (data.success) {
       searchResults = data.results;
       switchToTab("search");
       displaySearchResults();
-      
+
       const totalFound = data.results.reduce((sum, r) => sum + r.memories.length, 0);
       showFortune(`The Oracle has found ${totalFound} cursed memories...`);
     }
@@ -262,7 +278,7 @@ async function consultOracle() {
 function switchToTab(tab) {
   currentTab = tab;
   currentPage = 1;
-  
+
   // Update tab buttons
   document.querySelectorAll(".tab-button").forEach(btn => {
     if (btn.dataset.tab === tab) {
@@ -273,7 +289,7 @@ function switchToTab(tab) {
       btn.classList.remove("opacity-100");
     }
   });
-  
+
   // Load appropriate content
   if (tab === "recent") {
     loadMemories();
@@ -289,21 +305,21 @@ async function loadMemories(append = false) {
   if (!selectedNamespaces.size) {
     selectedNamespaces.add(`user:${userUuid}`);
   }
-  
+
   const container = document.getElementById("memories-container");
   if (!append) container.innerHTML = '<p class="text-center text-purple-400">The spirits gather your memories...</p>';
-  
+
   try {
     // For recent tab, just load from first selected namespace
     const namespace = Array.from(selectedNamespaces)[0];
     const [type, id] = namespace.includes(':') ? namespace.split(':') : ['all', 'all'];
-    
+
     const response = await fetch(`/${type}/${id}/memories?page=${currentPage}&limit=10`);
     const data = await response.json();
-    
+
     if (data.success) {
       if (!append) container.innerHTML = '';
-      
+
       if (data.memories.length === 0 && currentPage === 1) {
         container.innerHTML = `
           <div class="text-center py-12 text-purple-400">
@@ -316,7 +332,7 @@ async function loadMemories(append = false) {
         data.memories.forEach(memory => {
           container.appendChild(createMemoryCard(memory, namespace));
         });
-        
+
         // Show/hide load more button
         const pagination = document.getElementById("pagination");
         if (data.pagination && data.pagination.page < data.pagination.totalPages) {
@@ -336,11 +352,11 @@ async function loadMemories(append = false) {
 function createMemoryCard(memory, namespace) {
   const card = document.createElement("div");
   card.className = "tarot-card p-4 rounded-lg hover:scale-[1.01] transition-transform";
-  
+
   const date = new Date(memory.created_at);
   const timeAgo = getTimeAgo(date);
   const [type, id] = namespace.includes(':') ? namespace.split(':') : ['all', 'all'];
-  
+
   card.innerHTML = `
     <div class="flex justify-between items-start mb-2">
       <div class="flex items-center gap-2">
@@ -360,13 +376,13 @@ function createMemoryCard(memory, namespace) {
     <p class="text-purple-100 whitespace-pre-wrap">${escapeHtml(memory.content)}</p>
     ${memory.metadata ? `
       <div class="mt-2 text-xs text-purple-400">
-        ${Object.entries(memory.metadata).map(([key, value]) => 
+        ${Object.entries(memory.metadata).map(([key, value]) =>
           `<span class="inline-block bg-purple-900/30 px-2 py-1 rounded mr-1">${key}: ${value}</span>`
         ).join('')}
       </div>
     ` : ''}
   `;
-  
+
   return card;
 }
 
@@ -374,34 +390,34 @@ function createMemoryCard(memory, namespace) {
 function displaySearchResults() {
   const container = document.getElementById("memories-container");
   container.innerHTML = '';
-  
+
   if (!searchResults) {
     container.innerHTML = '<p class="text-center text-purple-400">No visions to display...</p>';
     return;
   }
-  
+
   let totalMemories = 0;
   searchResults.forEach(result => {
     if (result.memories.length > 0) {
       const section = document.createElement("div");
       section.className = "mb-6";
-      
+
       section.innerHTML = `
         <h3 class="text-purple-300 font-bold mb-3">
-          ${result.namespace === 'all' ? '🌐' : result.namespace.startsWith('user:') ? '👤' : '📁'} 
+          ${result.namespace === 'all' ? '🌐' : result.namespace.startsWith('user:') ? '👤' : '📁'}
           ${result.namespace}
         </h3>
       `;
-      
+
       result.memories.forEach(memory => {
         section.appendChild(createMemoryCard(memory, result.namespace));
       });
-      
+
       container.appendChild(section);
       totalMemories += result.memories.length;
     }
   });
-  
+
   if (totalMemories === 0) {
     container.innerHTML = `
       <div class="text-center py-12 text-purple-400">
@@ -411,7 +427,7 @@ function displaySearchResults() {
       </div>
     `;
   }
-  
+
   // Hide pagination for search results
   document.getElementById("pagination").classList.add("hidden");
 }
@@ -420,34 +436,34 @@ function displaySearchResults() {
 async function loadBrowseView() {
   const container = document.getElementById("memories-container");
   container.innerHTML = '<p class="text-center text-purple-400">Summoning the archives...</p>';
-  
+
   try {
     const allNamespaces = Array.from(document.querySelectorAll("#namespace-tokens button"))
       .map(btn => btn.dataset.namespace);
-    
+
     container.innerHTML = '';
-    
+
     for (const namespace of allNamespaces) {
       const [type, id] = namespace.includes(':') ? namespace.split(':') : ['all', 'all'];
       const response = await fetch(`/${type}/${id}/memories?page=1&limit=5`);
       const data = await response.json();
-      
+
       if (data.success && data.memories.length > 0) {
         const section = document.createElement("div");
         section.className = "mb-8";
-        
+
         section.innerHTML = `
           <h3 class="text-purple-300 font-bold mb-3 text-lg">
-            ${type === 'user' ? '👤' : type === 'project' ? '📁' : '🌐'} 
-            ${id} 
+            ${type === 'user' ? '👤' : type === 'project' ? '📁' : '🌐'}
+            ${id}
             <span class="text-sm font-normal text-purple-400">(${data.pagination.total} memories)</span>
           </h3>
         `;
-        
+
         data.memories.forEach(memory => {
           section.appendChild(createMemoryCard(memory, namespace));
         });
-        
+
         if (data.pagination.totalPages > 1) {
           const viewMoreBtn = document.createElement("button");
           viewMoreBtn.className = "mt-3 text-purple-400 hover:text-purple-300 text-sm underline";
@@ -459,11 +475,11 @@ async function loadBrowseView() {
           };
           section.appendChild(viewMoreBtn);
         }
-        
+
         container.appendChild(section);
       }
     }
-    
+
     if (container.innerHTML === '') {
       container.innerHTML = `
         <div class="text-center py-12 text-purple-400">
@@ -477,7 +493,7 @@ async function loadBrowseView() {
     console.error("Failed to load archives:", error);
     container.innerHTML = '<p class="text-center text-red-400">The archives are cursed... Cannot access.</p>';
   }
-  
+
   // Hide pagination for browse view
   document.getElementById("pagination").classList.add("hidden");
 }
@@ -492,7 +508,7 @@ async function editMemory(memoryId) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newContent.trim() })
       });
-      
+
       const data = await response.json();
       if (data.success) {
         showFortune("The memory has been altered... Reality shifts.");
@@ -515,7 +531,7 @@ async function deleteMemory(memoryId) {
       const response = await fetch(`/api/memories/${memoryId}`, {
         method: "DELETE"
       });
-      
+
       const data = await response.json();
       if (data.success) {
         showFortune("The memory fades into oblivion...");
@@ -536,9 +552,9 @@ function showConfigInstructions(client) {
   const modal = document.getElementById("config-modal");
   const content = document.getElementById("config-content");
   const sseUrl = document.getElementById("sse-url").value;
-  
+
   let instructions = '';
-  
+
   if (client === 'cursor') {
     instructions = `
       <h3 class="mystical-font text-xl text-purple-300 mb-3">Cursor Binding Ritual</h3>
@@ -595,7 +611,7 @@ function showConfigInstructions(client) {
       <p class="mt-3 text-sm text-purple-400">The winds carry memories across realms...</p>
     `;
   }
-  
+
   content.innerHTML = instructions;
   modal.classList.remove("hidden");
 }

@@ -1,430 +1,657 @@
-import { Hono } from "hono";
-import { MyMCP } from "./mcp";
-import { getAllMemoriesFromD1, initializeDatabase, deleteMemoryFromD1, updateMemoryInD1 } from "./utils/db";
-import { deleteVectorById, updateMemoryVector, searchMemories } from "./utils/vectorize";
+import { Hono } from "hono"
+import { MyMCP } from "./mcp"
+import { MCPSSEServer } from "./mcp-sse"
+import {
+    getAllMemoriesFromD1,
+    initializeDatabase,
+    deleteMemoryFromD1,
+    updateMemoryInD1,
+    storeMemoryInD1
+} from "./utils/db"
+import { deleteVectorById, updateMemoryVector, searchMemories } from "./utils/vectorize"
 
 const app = new Hono<{
-  Bindings: Env;
-}>();
+    Bindings: Env
+}>()
 
 // Initialize database once
-let dbInitialized = false;
+let dbInitialized = false
 
 // Middleware for one-time database initialization
 app.use("*", async (c, next) => {
-  if (!dbInitialized) {
-    try {
-      console.log("Attempting database initialization...");
-      await initializeDatabase(c.env);
-      dbInitialized = true;
-      console.log("Database initialized successfully.");
-    } catch (e) {
-      console.error("Failed to initialize D1 database:", e);
+    if (!dbInitialized) {
+        try {
+            console.log("Attempting database initialization...")
+            await initializeDatabase(c.env)
+            dbInitialized = true
+            console.log("Database initialized successfully.")
+        } catch (e) {
+            console.error("Failed to initialize D1 database:", e)
+        }
     }
-  }
-  await next();
-});
+    await next()
+})
 
 // index.html
-app.get("/", async (c) => await c.env.ASSETS.fetch(c.req.raw));
+app.get("/", async (c) => await c.env.ASSETS.fetch(c.req.raw))
+
+// Test endpoint to create sample data
+app.post("/api/test-data", async (c) => {
+    try {
+        const { storeMemoryInD1 } = await import("./utils/db")
+        const { storeMemory } = await import("./utils/vectorize")
+
+        // Create some test memories
+        const testMemories = [
+            { content: "User Alice loves JavaScript and React", namespace: "user:alice" },
+            { content: "User Bob prefers Python and Django", namespace: "user:bob" },
+            { content: "Project frontend uses React and TypeScript", namespace: "project:frontend" },
+            { content: "Authentication system implemented with JWT", namespace: "user:alice" },
+            { content: "Database migration completed successfully", namespace: "project:backend" }
+        ]
+
+        for (const memory of testMemories) {
+            // Store in D1
+            const memoryId = await storeMemoryInD1(memory.content, memory.namespace, c.env)
+
+            // Store in Vectorize
+            try {
+                await storeMemory(memory.content, memory.namespace, c.env)
+                console.log(`Created test memory: ${memoryId} in ${memory.namespace}`)
+            } catch (vectorError) {
+                console.error("Failed to store in Vectorize:", vectorError)
+            }
+        }
+
+        return c.json({ success: true, message: "Test data created successfully" })
+    } catch (error) {
+        console.error("Error creating test data:", error)
+        return c.json(
+            {
+                success: false,
+                error: "Failed to create test data",
+                details: error instanceof Error ? error.message : String(error)
+            },
+            500
+        )
+    }
+})
 
 // Get available namespaces (users and projects)
 app.get("/api/namespaces", async (c) => {
-  try {
-    // Get distinct namespaces from the database
-    const result = await c.env.DB.prepare(`
-      SELECT DISTINCT namespace FROM memories
-    `).all();
+    try {
+        console.log("Attempting to get namespaces...")
 
-    const namespaces = {
-      users: [] as string[],
-      projects: [] as string[],
-      all: false
-    };
+        // Get distinct namespaces from the database
+        const result = await c.env.DB.prepare(
+            `
+          SELECT DISTINCT namespace FROM memories
+        `
+        ).all()
 
-    if (result.results) {
-      for (const row of result.results) {
-        const namespace = (row as any).namespace;
-        if (namespace.startsWith("user:")) {
-          namespaces.users.push(namespace.substring(5));
-        } else if (namespace.startsWith("project:")) {
-          namespaces.projects.push(namespace.substring(8));
-        } else if (namespace === "all") {
-          namespaces.all = true;
+        console.log("Database query result:", result)
+
+        const namespaces = {
+            users: [] as string[],
+            projects: [] as string[],
+            all: false
         }
-      }
-    }
 
-    return c.json({ success: true, namespaces });
-  } catch (error) {
-    console.error("Error getting namespaces:", error);
-    return c.json({ success: false, error: "Failed to retrieve namespaces" }, 500);
-  }
-});
+        if (result.results) {
+            console.log("Processing", result.results.length, "namespace results")
+            for (const row of result.results) {
+                const namespace = (row as any).namespace
+                console.log("Processing namespace:", namespace)
+                if (namespace.startsWith("user:")) {
+                    namespaces.users.push(namespace.substring(5))
+                } else if (namespace.startsWith("project:")) {
+                    namespaces.projects.push(namespace.substring(8))
+                } else if (namespace === "all") {
+                    namespaces.all = true
+                }
+            }
+        } else {
+            console.log("No results found in database")
+        }
+
+        console.log("Final namespaces:", namespaces)
+        return c.json({ success: true, namespaces })
+    } catch (error) {
+        console.error("Error getting namespaces:", error)
+        return c.json(
+            {
+                success: false,
+                error: "Failed to retrieve namespaces",
+                details: error instanceof Error ? error.message : String(error)
+            },
+            500
+        )
+    }
+})
 
 // Search across multiple namespaces
 app.post("/api/search", async (c) => {
-  try {
-    const body = await c.req.json();
-    const { query, namespaces = [], dateFrom, dateTo } = body;
+    try {
+        const body = await c.req.json()
+        const { query, namespaces = [], dateFrom, dateTo } = body
 
-    if (!query) {
-      return c.json({ error: "Missing query parameter" }, 400);
-    }
+        if (!query) {
+            return c.json({ error: "Missing query parameter" }, 400)
+        }
 
-    const results = [];
-    
-    // Search each namespace
-    for (const namespace of namespaces) {
-      try {
-        const memories = await searchMemories(query, namespace, c.env);
-        
-        // If date filtering is requested, we'll need to fetch from D1 to get dates
-        if (dateFrom || dateTo) {
-          const dbMemories = await c.env.DB.prepare(`
-            SELECT id, created_at FROM memories 
-            WHERE namespace = ? 
+        const results = []
+
+        // Search each namespace
+        for (const namespace of namespaces) {
+            try {
+                const memories = await searchMemories(query, namespace, c.env)
+
+                // If date filtering is requested, we'll need to fetch from D1 to get dates
+                if (dateFrom || dateTo) {
+                    const dbMemories = await c.env.DB.prepare(
+                        `
+            SELECT id, created_at FROM memories
+            WHERE namespace = ?
             ${dateFrom ? "AND created_at >= ?" : ""}
             ${dateTo ? "AND created_at <= ?" : ""}
-          `).bind(
-            namespace,
-            ...(dateFrom ? [dateFrom] : []),
-            ...(dateTo ? [dateTo] : [])
-          ).all();
-          
-          const validIds = new Set((dbMemories.results || []).map((m: any) => m.id));
-          
-          results.push({
-            namespace,
-            memories: memories.filter(m => validIds.has(m.id))
-          });
-        } else {
-          results.push({ namespace, memories });
-        }
-      } catch (error) {
-        console.error(`Error searching namespace ${namespace}:`, error);
-      }
-    }
+          `
+                    )
+                        .bind(namespace, ...(dateFrom ? [dateFrom] : []), ...(dateTo ? [dateTo] : []))
+                        .all()
 
-    return c.json({ 
-      success: true,
-      query,
-      results 
-    });
-  } catch (error) {
-    console.error("Error in multi-namespace search:", error);
-    return c.json({ success: false, error: "Failed to search memories" }, 500);
-  }
-});
+                    const validIds = new Set((dbMemories.results || []).map((m: any) => m.id))
+
+                    results.push({
+                        namespace,
+                        memories: memories.filter((m) => validIds.has(m.id))
+                    })
+                } else {
+                    results.push({ namespace, memories })
+                }
+            } catch (error) {
+                console.error(`Error searching namespace ${namespace}:`, error)
+            }
+        }
+
+        return c.json({
+            success: true,
+            query,
+            results
+        })
+    } catch (error) {
+        console.error("Error in multi-namespace search:", error)
+        return c.json({ success: false, error: "Failed to search memories" }, 500)
+    }
+})
+
+// Search across all namespaces (read-only)
+app.post("/api/search-all", async (c) => {
+    try {
+        const body = await c.req.json()
+        const { query, dateFrom, dateTo } = body
+
+        if (!query) {
+            return c.json({ error: "Missing query parameter" }, 400)
+        }
+
+        // Get all namespaces
+        const result = await c.env.DB.prepare(
+            `
+      SELECT DISTINCT namespace FROM memories
+    `
+        ).all()
+
+        const results = []
+
+        // Search each namespace
+        if (result.results) {
+            for (const row of result.results) {
+                const namespace = (row as any).namespace
+                try {
+                    const memories = await searchMemories(query, namespace, c.env)
+
+                    // If date filtering is requested, we'll need to fetch from D1 to get dates
+                    if (dateFrom || dateTo) {
+                        const dbMemories = await c.env.DB.prepare(
+                            `
+              SELECT id, created_at FROM memories
+              WHERE namespace = ?
+              ${dateFrom ? "AND created_at >= ?" : ""}
+              ${dateTo ? "AND created_at <= ?" : ""}
+            `
+                        )
+                            .bind(namespace, ...(dateFrom ? [dateFrom] : []), ...(dateTo ? [dateTo] : []))
+                            .all()
+
+                        const validIds = new Set((dbMemories.results || []).map((m: any) => m.id))
+
+                        results.push({
+                            namespace,
+                            memories: memories.filter((m) => validIds.has(m.id))
+                        })
+                    } else {
+                        results.push({ namespace, memories })
+                    }
+                } catch (error) {
+                    console.error(`Error searching namespace ${namespace}:`, error)
+                }
+            }
+        }
+
+        return c.json({
+            success: true,
+            query,
+            results
+        })
+    } catch (error) {
+        console.error("Error in all-namespace search:", error)
+        return c.json({ success: false, error: "Failed to search memories" }, 500)
+    }
+})
 
 // Get all memories for a namespace with pagination
 app.get("/:namespaceType/:namespaceId/memories", async (c) => {
-  const namespaceType = c.req.param("namespaceType");
-  const namespaceId = c.req.param("namespaceId");
-  const namespace = `${namespaceType}:${namespaceId}`;
-  
-  // Pagination parameters
-  const page = parseInt(c.req.query("page") || "1");
-  const limit = parseInt(c.req.query("limit") || "20");
-  const offset = (page - 1) * limit;
-  const sortBy = c.req.query("sortBy") || "date";
+    const namespaceType = c.req.param("namespaceType")
+    const namespaceId = c.req.param("namespaceId")
+    const namespace = `${namespaceType}:${namespaceId}`
 
-  try {
-    // Get total count
-    const countResult = await c.env.DB.prepare(
-      "SELECT COUNT(*) as total FROM memories WHERE namespace = ?"
-    ).bind(namespace).first();
-    
-    const total = (countResult as any)?.total || 0;
-    
-    // Get paginated results
-    const orderBy = sortBy === "date" ? "created_at DESC" : "created_at DESC";
-    const memories = await c.env.DB.prepare(
-      `SELECT id, content, created_at FROM memories 
-       WHERE namespace = ? 
+    // Pagination parameters
+    const page = parseInt(c.req.query("page") || "1")
+    const limit = parseInt(c.req.query("limit") || "20")
+    const offset = (page - 1) * limit
+    const sortBy = c.req.query("sortBy") || "date"
+
+    try {
+        // Get total count
+        const countResult = await c.env.DB.prepare("SELECT COUNT(*) as total FROM memories WHERE namespace = ?")
+            .bind(namespace)
+            .first()
+
+        const total = (countResult as any)?.total || 0
+
+        // Get paginated results
+        const orderBy = sortBy === "date" ? "created_at DESC" : "created_at DESC"
+        const memories = await c.env.DB.prepare(
+            `SELECT id, content, created_at FROM memories
+       WHERE namespace = ?
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
-    ).bind(namespace, limit, offset).all();
+        )
+            .bind(namespace, limit, offset)
+            .all()
 
-    return c.json({ 
-      success: true, 
-      memories: memories.results,
-      namespace,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      }
-    });
-  } catch (error) {
-    console.error(`Error retrieving memories for namespace ${namespace}:`, error);
-    return c.json({ success: false, error: "Failed to retrieve memories" }, 500);
-  }
-});
+        return c.json({
+            success: true,
+            memories: memories.results,
+            namespace,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        })
+    } catch (error) {
+        console.error(`Error retrieving memories for namespace ${namespace}:`, error)
+        return c.json({ success: false, error: "Failed to retrieve memories" }, 500)
+    }
+})
 
 // Delete a memory for a namespace
 app.delete("/:namespaceType/:namespaceId/memories/:memoryId", async (c) => {
-  const namespaceType = c.req.param("namespaceType");
-  const namespaceId = c.req.param("namespaceId");
-  const memoryId = c.req.param("memoryId");
-  const namespace = `${namespaceType}:${namespaceId}`;
+    const namespaceType = c.req.param("namespaceType")
+    const namespaceId = c.req.param("namespaceId")
+    const memoryId = c.req.param("memoryId")
+    const namespace = `${namespaceType}:${namespaceId}`
 
-  try {
-    // 1. Delete from D1
-    await deleteMemoryFromD1(memoryId, namespace, c.env);
-    console.log(`Deleted memory ${memoryId} for namespace ${namespace} from D1.`);
-
-    // 2. Delete from Vectorize index
     try {
-      await deleteVectorById(memoryId, namespace, c.env);
-      console.log(`Attempted to delete vector ${memoryId} for namespace ${namespace} from Vectorize.`);
-    } catch (vectorError) {
-      console.error(`Failed to delete vector ${memoryId} for namespace ${namespace} from Vectorize:`, vectorError);
-    }
+        // 1. Delete from D1
+        await deleteMemoryFromD1(memoryId, namespace, c.env)
+        console.log(`Deleted memory ${memoryId} for namespace ${namespace} from D1.`)
 
-    return c.json({ success: true });
-  } catch (error) {
-    console.error(`Error deleting memory ${memoryId} (D1 primary) for namespace ${namespace}:`, error);
-    return c.json({ success: false, error: "Failed to delete memory" }, 500);
-  }
-});
+        // 2. Delete from Vectorize index
+        try {
+            await deleteVectorById(memoryId, namespace, c.env)
+            console.log(`Attempted to delete vector ${memoryId} for namespace ${namespace} from Vectorize.`)
+        } catch (vectorError) {
+            console.error(`Failed to delete vector ${memoryId} for namespace ${namespace} from Vectorize:`, vectorError)
+        }
+
+        return c.json({ success: true })
+    } catch (error) {
+        console.error(`Error deleting memory ${memoryId} (D1 primary) for namespace ${namespace}:`, error)
+        return c.json({ success: false, error: "Failed to delete memory" }, 500)
+    }
+})
 
 // Update a specific memory for a namespace
 app.put("/:namespaceType/:namespaceId/memories/:memoryId", async (c) => {
-  const namespaceType = c.req.param("namespaceType");
-  const namespaceId = c.req.param("namespaceId");
-  const memoryId = c.req.param("memoryId");
-  const namespace = `${namespaceType}:${namespaceId}`;
-  let updatedContent: string;
+    const namespaceType = c.req.param("namespaceType")
+    const namespaceId = c.req.param("namespaceId")
+    const memoryId = c.req.param("memoryId")
+    const namespace = `${namespaceType}:${namespaceId}`
+    let updatedContent: string
 
-  try {
-    // Get updated content from request body
-    const body = await c.req.json();
-    if (!body || typeof body.content !== "string" || body.content.trim() === "") {
-      return c.json({ success: false, error: "Invalid or missing content in request body" }, 400);
-    }
-    updatedContent = body.content.trim();
-  } catch (e) {
-    console.error("Failed to parse request body:", e);
-    return c.json({ success: false, error: "Failed to parse request body" }, 400);
-  }
-
-  try {
-    // 1. Update in D1
-    await updateMemoryInD1(memoryId, namespace, updatedContent, c.env);
-    console.log(`Updated memory ${memoryId} for namespace ${namespace} in D1.`);
-
-    // 2. Update vector in Vectorize
     try {
-      await updateMemoryVector(memoryId, updatedContent, namespace, c.env);
-      console.log(`Updated vector ${memoryId} for namespace ${namespace} in Vectorize.`);
-    } catch (vectorError) {
-      console.error(`Failed to update vector ${memoryId} for namespace ${namespace} in Vectorize:`, vectorError);
+        // Get updated content from request body
+        const body = await c.req.json()
+        if (!body || typeof body.content !== "string" || body.content.trim() === "") {
+            return c.json({ success: false, error: "Invalid or missing content in request body" }, 400)
+        }
+        updatedContent = body.content.trim()
+    } catch (e) {
+        console.error("Failed to parse request body:", e)
+        return c.json({ success: false, error: "Failed to parse request body" }, 400)
     }
 
-    return c.json({ success: true });
-  } catch (error: any) {
-    console.error(`Error updating memory ${memoryId} for namespace ${namespace}:`, error);
-    const errorMessage = error.message || "Failed to update memory";
-    if (errorMessage.includes("not found")) {
-      return c.json({ success: false, error: errorMessage }, 404);
+    try {
+        // 1. Update in D1
+        await updateMemoryInD1(memoryId, namespace, updatedContent, c.env)
+        console.log(`Updated memory ${memoryId} for namespace ${namespace} in D1.`)
+
+        // 2. Update vector in Vectorize
+        try {
+            await updateMemoryVector(memoryId, updatedContent, namespace, c.env)
+            console.log(`Updated vector ${memoryId} for namespace ${namespace} in Vectorize.`)
+        } catch (vectorError) {
+            console.error(`Failed to update vector ${memoryId} for namespace ${namespace} in Vectorize:`, vectorError)
+        }
+
+        return c.json({ success: true })
+    } catch (error: any) {
+        console.error(`Error updating memory ${memoryId} for namespace ${namespace}:`, error)
+        const errorMessage = error.message || "Failed to update memory"
+        if (errorMessage.includes("not found")) {
+            return c.json({ success: false, error: errorMessage }, 404)
+        }
+        return c.json({ success: false, error: errorMessage }, 500)
     }
-    return c.json({ success: false, error: errorMessage }, 500);
-  }
-});
+})
 
 // Simple search API for Slack bot and other integrations
 app.post("/search/:namespaceType/:namespaceId", async (c) => {
-  const namespaceType = c.req.param("namespaceType");
-  const namespaceId = c.req.param("namespaceId");
-  const namespace = `${namespaceType}:${namespaceId}`;
-  
-  try {
-    const { query } = await c.req.json();
-    
-    if (!query) {
-      return c.json({ error: "Missing query parameter" }, 400);
+    const namespaceType = c.req.param("namespaceType")
+    const namespaceId = c.req.param("namespaceId")
+    const namespace = `${namespaceType}:${namespaceId}`
+
+    try {
+        const { query } = await c.req.json()
+
+        if (!query) {
+            return c.json({ error: "Missing query parameter" }, 400)
+        }
+
+        const memories = await searchMemories(query, namespace, c.env)
+
+        return c.json({
+            success: true,
+            namespace,
+            query,
+            memories
+        })
+    } catch (error) {
+        console.error(`Error searching memories in namespace ${namespace}:`, error)
+        return c.json({ success: false, error: "Failed to search memories" }, 500)
     }
-    
-    const memories = await searchMemories(query, namespace, c.env);
-    
-    return c.json({ 
-      success: true,
-      namespace,
-      query,
-      memories 
-    });
-  } catch (error) {
-    console.error(`Error searching memories in namespace ${namespace}:`, error);
-    return c.json({ success: false, error: "Failed to search memories" }, 500);
-  }
-});
+})
 
 // Generic API endpoints for updating and deleting memories by ID
 app.put("/api/memories/:memoryId", async (c) => {
-  const memoryId = c.req.param("memoryId");
-  let updatedContent: string;
+    const memoryId = c.req.param("memoryId")
+    let updatedContent: string
 
-  try {
-    // Get updated content from request body
-    const body = await c.req.json();
-    if (!body || typeof body.content !== "string" || body.content.trim() === "") {
-      return c.json({ success: false, error: "Invalid or missing content in request body" }, 400);
-    }
-    updatedContent = body.content.trim();
-  } catch (e) {
-    console.error("Failed to parse request body:", e);
-    return c.json({ success: false, error: "Failed to parse request body" }, 400);
-  }
-
-  try {
-    // First, find which namespace this memory belongs to
-    const memoryResult = await c.env.DB.prepare(
-      "SELECT namespace FROM memories WHERE id = ?"
-    ).bind(memoryId).first();
-
-    if (!memoryResult) {
-      return c.json({ success: false, error: "Memory not found" }, 404);
-    }
-
-    const namespace = (memoryResult as any).namespace;
-
-    // Update in D1
-    await updateMemoryInD1(memoryId, namespace, updatedContent, c.env);
-    console.log(`Updated memory ${memoryId} in namespace ${namespace} in D1.`);
-
-    // Update vector in Vectorize
     try {
-      await updateMemoryVector(memoryId, updatedContent, namespace, c.env);
-      console.log(`Updated vector ${memoryId} in namespace ${namespace} in Vectorize.`);
-    } catch (vectorError) {
-      console.error(`Failed to update vector ${memoryId} in namespace ${namespace} in Vectorize:`, vectorError);
+        // Get updated content from request body
+        const body = await c.req.json()
+        if (!body || typeof body.content !== "string" || body.content.trim() === "") {
+            return c.json({ success: false, error: "Invalid or missing content in request body" }, 400)
+        }
+        updatedContent = body.content.trim()
+    } catch (e) {
+        console.error("Failed to parse request body:", e)
+        return c.json({ success: false, error: "Failed to parse request body" }, 400)
     }
 
-    return c.json({ success: true });
-  } catch (error: any) {
-    console.error(`Error updating memory ${memoryId}:`, error);
-    const errorMessage = error.message || "Failed to update memory";
-    if (errorMessage.includes("not found")) {
-      return c.json({ success: false, error: errorMessage }, 404);
+    try {
+        // First, find which namespace this memory belongs to
+        const memoryResult = await c.env.DB.prepare("SELECT namespace FROM memories WHERE id = ?")
+            .bind(memoryId)
+            .first()
+
+        if (!memoryResult) {
+            return c.json({ success: false, error: "Memory not found" }, 404)
+        }
+
+        const namespace = (memoryResult as any).namespace
+
+        // Update in D1
+        await updateMemoryInD1(memoryId, namespace, updatedContent, c.env)
+        console.log(`Updated memory ${memoryId} in namespace ${namespace} in D1.`)
+
+        // Update vector in Vectorize
+        try {
+            await updateMemoryVector(memoryId, updatedContent, namespace, c.env)
+            console.log(`Updated vector ${memoryId} in namespace ${namespace} in Vectorize.`)
+        } catch (vectorError) {
+            console.error(`Failed to update vector ${memoryId} in namespace ${namespace} in Vectorize:`, vectorError)
+        }
+
+        return c.json({ success: true })
+    } catch (error: any) {
+        console.error(`Error updating memory ${memoryId}:`, error)
+        const errorMessage = error.message || "Failed to update memory"
+        if (errorMessage.includes("not found")) {
+            return c.json({ success: false, error: errorMessage }, 404)
+        }
+        return c.json({ success: false, error: errorMessage }, 500)
     }
-    return c.json({ success: false, error: errorMessage }, 500);
-  }
-});
+})
 
 app.delete("/api/memories/:memoryId", async (c) => {
-  const memoryId = c.req.param("memoryId");
+    const memoryId = c.req.param("memoryId")
 
-  try {
-    // First, find which namespace this memory belongs to
-    const memoryResult = await c.env.DB.prepare(
-      "SELECT namespace FROM memories WHERE id = ?"
-    ).bind(memoryId).first();
-
-    if (!memoryResult) {
-      return c.json({ success: false, error: "Memory not found" }, 404);
-    }
-
-    const namespace = (memoryResult as any).namespace;
-
-    // Delete from D1
-    await deleteMemoryFromD1(memoryId, namespace, c.env);
-    console.log(`Deleted memory ${memoryId} from namespace ${namespace} in D1.`);
-
-    // Delete from Vectorize index
     try {
-      await deleteVectorById(memoryId, namespace, c.env);
-      console.log(`Deleted vector ${memoryId} from namespace ${namespace} in Vectorize.`);
-    } catch (vectorError) {
-      console.error(`Failed to delete vector ${memoryId} from namespace ${namespace} in Vectorize:`, vectorError);
+        // First, find which namespace this memory belongs to
+        const memoryResult = await c.env.DB.prepare("SELECT namespace FROM memories WHERE id = ?")
+            .bind(memoryId)
+            .first()
+
+        if (!memoryResult) {
+            return c.json({ success: false, error: "Memory not found" }, 404)
+        }
+
+        const namespace = (memoryResult as any).namespace
+
+        // Delete from D1
+        await deleteMemoryFromD1(memoryId, namespace, c.env)
+        console.log(`Deleted memory ${memoryId} from namespace ${namespace} in D1.`)
+
+        // Delete from Vectorize index
+        try {
+            await deleteVectorById(memoryId, namespace, c.env)
+            console.log(`Deleted vector ${memoryId} from namespace ${namespace} in Vectorize.`)
+        } catch (vectorError) {
+            console.error(`Failed to delete vector ${memoryId} from namespace ${namespace} in Vectorize:`, vectorError)
+        }
+
+        return c.json({ success: true })
+    } catch (error) {
+        console.error(`Error deleting memory ${memoryId}:`, error)
+        return c.json({ success: false, error: "Failed to delete memory" }, 500)
+    }
+})
+
+// Handle MCP SSE endpoint for user namespace
+app.all("/user/:userId/sse", async (c) => {
+    const userId = c.req.param("userId")
+    console.log("=== USER SSE ENDPOINT ===")
+    console.log("UserId from param:", userId)
+    console.log("Full URL:", c.req.url)
+    console.log("Method:", c.req.method)
+
+    if (!userId) {
+        console.error("No userId parameter found")
+        return new Response("Bad Request: Missing userId", { status: 400 })
     }
 
-    return c.json({ success: true });
-  } catch (error) {
-    console.error(`Error deleting memory ${memoryId}:`, error);
-    return c.json({ success: false, error: "Failed to delete memory" }, 500);
-  }
-});
+    const namespace = `user:${userId}`
+    const mcpServer = new MCPSSEServer(namespace, c.env)
 
-// Mount handler for user namespace
-app.mount("/user/:userId", async (req, env, ctx) => {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/user\/([^\/]+)/);
-  const userId = match ? match[1] : null;
+    try {
+        if (c.req.method === "GET") {
+            // Handle SSE connection
+            console.log("Handling SSE connection for namespace:", namespace)
+            return await mcpServer.handleSSEConnection()
+        } else if (c.req.method === "POST") {
+            // Handle JSON-RPC request
+            const body = await c.req.json()
+            console.log("Handling JSON-RPC request:", body)
+            const response = await mcpServer.handleJSONRPCRequest(body)
+            return new Response(JSON.stringify(response), {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type"
+                }
+            })
+        } else {
+            return new Response("Method Not Allowed", { status: 405 })
+        }
+    } catch (error) {
+        console.error("MCP error:", error)
+        return new Response("Internal Server Error: MCP failed", { status: 500 })
+    }
+})
 
-  if (!userId) {
-    return new Response("Bad Request: Could not extract userId from URL path", { status: 400 });
-  }
+// Handle MCP SSE endpoint for project namespace
+app.all("/project/:projectId/sse", async (c) => {
+    const projectId = c.req.param("projectId")
+    console.log("=== PROJECT SSE ENDPOINT ===")
+    console.log("ProjectId from param:", projectId)
 
-  // Pass namespace info to the MCP agent
-  ctx.props = {
-    namespace: `user:${userId}`,
-    namespaceType: 'user' as const,
-  };
+    if (!projectId) {
+        return new Response("Bad Request: Missing projectId", { status: 400 })
+    }
 
-  const response = await MyMCP.mount(`/user/${userId}/sse`).fetch(req, env, ctx);
-  if (response) {
-    return response;
-  }
+    const ctx = {
+        props: {
+            namespace: `project:${projectId}`,
+            namespaceType: "project" as const
+        }
+    }
 
-  return new Response("Not Found within MCP mount", { status: 404 });
-});
+    try {
+        const response = await MyMCP.mount(`/project/${projectId}/sse`).fetch(c.req.raw, c.env, ctx)
+        if (response) {
+            return response
+        }
+    } catch (error) {
+        console.error("MCP error:", error)
+        return new Response("Internal Server Error: MCP failed", { status: 500 })
+    }
 
-// Mount handler for project namespace
-app.mount("/project/:projectId", async (req, env, ctx) => {
-  const url = new URL(req.url);
-  const match = url.pathname.match(/\/project\/([^\/]+)/);
-  const projectId = match ? match[1] : null;
+    return new Response("Not Found in MCP", { status: 404 })
+})
 
-  if (!projectId) {
-    return new Response("Bad Request: Could not extract projectId from URL path", { status: 400 });
-  }
+// Handle MCP SSE endpoint for organization-wide namespace
+app.all("/all/sse", async (c) => {
+    console.log("=== ALL SSE ENDPOINT ===")
 
-  // Pass namespace info to the MCP agent
-  ctx.props = {
-    namespace: `project:${projectId}`,
-    namespaceType: 'project' as const,
-  };
+    const ctx = {
+        props: {
+            namespace: "all",
+            namespaceType: "all" as const
+        }
+    }
 
-  const response = await MyMCP.mount(`/project/${projectId}/sse`).fetch(req, env, ctx);
-  if (response) {
-    return response;
-  }
+    try {
+        const response = await MyMCP.mount("/all/sse").fetch(c.req.raw, c.env, ctx)
+        if (response) {
+            return response
+        }
+    } catch (error) {
+        console.error("MCP error:", error)
+        return new Response("Internal Server Error: MCP failed", { status: 500 })
+    }
 
-  return new Response("Not Found within MCP mount", { status: 404 });
-});
+    return new Response("Not Found in MCP", { status: 404 })
+})
 
-// Mount handler for organization-wide namespace (future feature)
-app.mount("/all", async (req, env, ctx) => {
-  // Pass namespace info to the MCP agent
-  ctx.props = {
-    namespace: 'all',
-    namespaceType: 'all' as const,
-  };
+// Serve admin page
+app.get("/admin", async (c) => {
+    return c.html(await c.env.ASSETS.fetch("https://mcp-memory.loqwai.workers.dev/admin.html").then((r) => r.text()))
+})
 
-  const response = await MyMCP.mount("/all/sse").fetch(req, env, ctx);
-  if (response) {
-    return response;
-  }
+// Test endpoint to check database structure
+app.get("/api/db-info", async (c) => {
+    try {
+        // Get table info
+        const tableInfo = await c.env.DB.prepare("PRAGMA table_info(memories)").all()
 
-  return new Response("Not Found within MCP mount", { status: 404 });
-});
+        // Get count of memories
+        const count = await c.env.DB.prepare("SELECT COUNT(*) as count FROM memories").first()
 
-// Legacy support - redirect old format to new user namespace
-app.mount("/:userId", async (req, env, ctx) => {
-  const url = new URL(req.url);
-  const pathSegments = url.pathname.split("/");
-  const userId = pathSegments[1];
-  
-  if (!userId || userId === 'user' || userId === 'project' || userId === 'all' || userId === 'api') {
-    return new Response("Not Found", { status: 404 });
-  }
+        // Get sample data
+        const sample = await c.env.DB.prepare("SELECT * FROM memories LIMIT 5").all()
 
-  // Redirect to new user namespace format
-  return Response.redirect(`${url.origin}/user/${userId}${pathSegments.slice(2).join('/')}`, 301);
-});
+        return c.json({
+            success: true,
+            tableInfo: tableInfo.results,
+            count: (count as any)?.count || 0,
+            sample: sample.results
+        })
+    } catch (error) {
+        console.error("Error getting database info:", error)
+        return c.json(
+            {
+                success: false,
+                error: "Failed to get database info",
+                details: error instanceof Error ? error.message : String(error)
+            },
+            500
+        )
+    }
+})
 
-export default app;
+// Simple test endpoint to add a basic memory
+app.post("/api/simple-test", async (c) => {
+    try {
+        const memoryId = crypto.randomUUID()
+        const content = "This is a simple test memory"
+        const namespace = "user:test"
 
-export { MyMCP };
+        // Try to insert directly
+        const result = await c.env.DB.prepare("INSERT INTO memories (id, content, namespace) VALUES (?, ?, ?)")
+            .bind(memoryId, content, namespace)
+            .run()
+
+        console.log("Insert result:", result)
+
+        return c.json({
+            success: true,
+            message: "Simple test memory created",
+            memoryId,
+            result
+        })
+    } catch (error) {
+        console.error("Error creating simple test:", error)
+        return c.json(
+            {
+                success: false,
+                error: "Failed to create simple test",
+                details: error instanceof Error ? error.message : String(error)
+            },
+            500
+        )
+    }
+})
+
+// Fallback to static assets
+app.get("*", async (c) => {
+    return c.env.ASSETS.fetch(c.req.raw)
+})
+
+export default app
+
+export { MyMCP }

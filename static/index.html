@@ -1,55 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Memory Oracle - Every Memory Has Its Price</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nosifer&family=Griffy&family=Jolly+Lodger&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Creepster&family=Nosifer&family=Griffy&family=Jolly+Lodger&display=swap"
+    rel="stylesheet">
   <style>
     @keyframes flicker {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.8; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.8;
+      }
     }
-    
+
     @keyframes glow {
-      0%, 100% { box-shadow: 0 0 20px rgba(138, 43, 226, 0.8), 0 0 40px rgba(138, 43, 226, 0.4); }
-      50% { box-shadow: 0 0 30px rgba(138, 43, 226, 1), 0 0 60px rgba(138, 43, 226, 0.6); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 20px rgba(138, 43, 226, 0.8), 0 0 40px rgba(138, 43, 226, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 30px rgba(138, 43, 226, 1), 0 0 60px rgba(138, 43, 226, 0.6);
+      }
     }
-    
+
     @keyframes smoke {
-      0% { transform: translateY(0) rotate(0deg); opacity: 0; }
-      10% { opacity: 0.5; }
-      90% { opacity: 0.5; }
-      100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+      0% {
+        transform: translateY(0) rotate(0deg);
+        opacity: 0;
+      }
+
+      10% {
+        opacity: 0.5;
+      }
+
+      90% {
+        opacity: 0.5;
+      }
+
+      100% {
+        transform: translateY(-100px) rotate(360deg);
+        opacity: 0;
+      }
     }
-    
+
     @keyframes shake {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-2px); }
-      75% { transform: translateX(2px); }
+
+      0%,
+      100% {
+        transform: translateX(0);
+      }
+
+      25% {
+        transform: translateX(-2px);
+      }
+
+      75% {
+        transform: translateX(2px);
+      }
     }
-    
+
     @keyframes float {
-      0%, 100% { transform: translateY(0px); }
-      50% { transform: translateY(-10px); }
+
+      0%,
+      100% {
+        transform: translateY(0px);
+      }
+
+      50% {
+        transform: translateY(-10px);
+      }
     }
-    
-    .creepy-font { font-family: 'Creepster', cursive; }
-    .horror-font { font-family: 'Nosifer', cursive; }
-    .mystical-font { font-family: 'Griffy', cursive; }
-    .eerie-font { font-family: 'Jolly Lodger', cursive; }
-    
-    .flicker { animation: flicker 3s infinite; }
-    .glow { animation: glow 2s infinite; }
-    .shake { animation: shake 0.5s infinite; }
-    .float { animation: float 3s ease-in-out infinite; }
-    
+
+    .creepy-font {
+      font-family: 'Creepster', cursive;
+    }
+
+    .horror-font {
+      font-family: 'Nosifer', cursive;
+    }
+
+    .mystical-font {
+      font-family: 'Griffy', cursive;
+    }
+
+    .eerie-font {
+      font-family: 'Jolly Lodger', cursive;
+    }
+
+    .flicker {
+      animation: flicker 3s infinite;
+    }
+
+    .glow {
+      animation: glow 2s infinite;
+    }
+
+    .shake {
+      animation: shake 0.5s infinite;
+    }
+
+    .float {
+      animation: float 3s ease-in-out infinite;
+    }
+
     .crystal-ball {
       background: radial-gradient(circle at 30% 30%, rgba(147, 51, 234, 0.3), rgba(45, 27, 105, 0.8));
       box-shadow: inset 0 0 50px rgba(147, 51, 234, 0.5), 0 0 100px rgba(147, 51, 234, 0.3);
     }
-    
+
     .smoke-effect {
       position: absolute;
       width: 60px;
@@ -58,61 +127,61 @@
       border-radius: 50%;
       animation: smoke 4s infinite;
     }
-    
+
     .tarot-card {
       background: linear-gradient(45deg, #1a0f1f, #2d1b69);
       border: 2px solid #6b21a8;
       box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
       transition: all 0.3s ease;
     }
-    
+
     .tarot-card:hover {
       transform: rotateY(5deg) scale(1.02);
       box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);
     }
-    
+
     .blood-text {
       color: #DC143C;
       text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 10px rgba(220, 20, 60, 0.5);
     }
-    
+
     .cursed-input {
       background: rgba(45, 27, 105, 0.3);
       border: 2px solid #6b21a8;
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 0 20px rgba(139, 92, 246, 0.2);
     }
-    
+
     .cursed-input:focus {
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 0 30px rgba(139, 92, 246, 0.5);
       border-color: #9333ea;
     }
-    
+
     .coin-slot {
       background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
       box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.1);
     }
-    
+
     .mystical-token {
       background: linear-gradient(45deg, #6b21a8, #4c1d95);
       box-shadow: 0 2px 10px rgba(139, 92, 246, 0.4);
       border: 1px solid #8b5cf6;
       transition: all 0.2s ease;
     }
-    
+
     .mystical-token:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 20px rgba(139, 92, 246, 0.6);
     }
-    
+
     .fortune-paper {
       background: linear-gradient(to bottom, #f3e7d3, #e6d4b8);
-      background-image: 
-        repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(0,0,0,0.05) 20px, rgba(0,0,0,0.05) 21px),
-        repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(0,0,0,0.05) 20px, rgba(0,0,0,0.05) 21px);
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(0, 0, 0, 0.05) 20px, rgba(0, 0, 0, 0.05) 21px),
+        repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(0, 0, 0, 0.05) 20px, rgba(0, 0, 0, 0.05) 21px);
       box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
       position: relative;
     }
-    
+
     .fortune-paper::before {
       content: '';
       position: absolute;
@@ -122,12 +191,12 @@
       height: 5px;
       background: repeating-linear-gradient(90deg, #e6d4b8 0, #e6d4b8 5px, transparent 5px, transparent 10px);
     }
-    
+
     .glitch {
       position: relative;
       display: inline-block;
     }
-    
+
     .glitch::before,
     .glitch::after {
       content: attr(data-text);
@@ -137,63 +206,106 @@
       width: 100%;
       height: 100%;
     }
-    
+
     .glitch::before {
       animation: glitch-1 0.3s infinite;
       color: #ff00c1;
       z-index: -1;
     }
-    
+
     .glitch::after {
       animation: glitch-2 0.3s infinite;
       color: #00fff9;
       z-index: -2;
     }
-    
+
     @keyframes glitch-1 {
-      0%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
-      20% { clip-path: inset(20% 0 60% 0); transform: translate(-2px); }
-      40% { clip-path: inset(50% 0 20% 0); transform: translate(2px); }
-      60% { clip-path: inset(10% 0 80% 0); transform: translate(0); }
-      80% { clip-path: inset(80% 0 10% 0); transform: translate(1px); }
+
+      0%,
+      100% {
+        clip-path: inset(0 0 0 0);
+        transform: translate(0);
+      }
+
+      20% {
+        clip-path: inset(20% 0 60% 0);
+        transform: translate(-2px);
+      }
+
+      40% {
+        clip-path: inset(50% 0 20% 0);
+        transform: translate(2px);
+      }
+
+      60% {
+        clip-path: inset(10% 0 80% 0);
+        transform: translate(0);
+      }
+
+      80% {
+        clip-path: inset(80% 0 10% 0);
+        transform: translate(1px);
+      }
     }
-    
+
     @keyframes glitch-2 {
-      0%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
-      20% { clip-path: inset(80% 0 10% 0); transform: translate(1px); }
-      40% { clip-path: inset(10% 0 80% 0); transform: translate(-1px); }
-      60% { clip-path: inset(50% 0 20% 0); transform: translate(0); }
-      80% { clip-path: inset(20% 0 60% 0); transform: translate(2px); }
+
+      0%,
+      100% {
+        clip-path: inset(0 0 0 0);
+        transform: translate(0);
+      }
+
+      20% {
+        clip-path: inset(80% 0 10% 0);
+        transform: translate(1px);
+      }
+
+      40% {
+        clip-path: inset(10% 0 80% 0);
+        transform: translate(-1px);
+      }
+
+      60% {
+        clip-path: inset(50% 0 20% 0);
+        transform: translate(0);
+      }
+
+      80% {
+        clip-path: inset(20% 0 60% 0);
+        transform: translate(2px);
+      }
     }
-    
+
     /* Custom scrollbar */
     ::-webkit-scrollbar {
       width: 12px;
     }
-    
+
     ::-webkit-scrollbar-track {
       background: #1a0f1f;
       border: 1px solid #2d1b69;
     }
-    
+
     ::-webkit-scrollbar-thumb {
       background: linear-gradient(180deg, #6b21a8, #4c1d95);
       border-radius: 6px;
     }
-    
+
     ::-webkit-scrollbar-thumb:hover {
       background: linear-gradient(180deg, #7c3aed, #6b21a8);
     }
-    
+
     body {
       background: #0a0612;
-      background-image: 
+      background-image:
         radial-gradient(circle at 20% 50%, rgba(138, 43, 226, 0.1) 0%, transparent 50%),
         radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
         radial-gradient(circle at 40% 20%, rgba(147, 51, 234, 0.1) 0%, transparent 50%);
     }
   </style>
 </head>
+
 <body class="min-h-screen text-purple-100">
   <!-- Smoke effects -->
   <div class="fixed pointer-events-none">
@@ -226,38 +338,33 @@
           Your Personal Summoning Incantation:
         </label>
         <div class="flex items-center space-x-3">
-          <input
-            type="text"
-            name="sse-url"
-            id="sse-url"
-            class="flex-grow cursed-input py-3 px-4 rounded-md text-purple-100 text-lg font-mono"
-            readonly
-            placeholder="The spirits are gathering..."
-          />
-          <button
-            id="copy-button"
-            type="button"
+          <input type="text" name="sse-url" id="sse-url"
+            class="flex-grow cursed-input py-3 px-4 rounded-md text-purple-100 text-lg font-mono" readonly
+            placeholder="The spirits are gathering..." />
+          <button id="copy-button" type="button"
             class="mystical-token px-6 py-3 rounded-md text-white font-bold hover:scale-105 transition-transform cursor-pointer"
-            title="Seal the pact"
-          >
+            title="Seal the pact">
             📜 Seal Pact
           </button>
         </div>
         <p class="mt-3 text-sm text-purple-300 italic">
           Guard this incantation with your life. It binds your soul to the Oracle...
         </p>
-        
+
         <!-- Configuration buttons -->
         <div class="mt-4 flex gap-2 justify-center">
-          <button onclick="showConfigInstructions('cursor')" class="text-purple-400 hover:text-purple-300 text-sm underline">
+          <button onclick="showConfigInstructions('cursor')"
+            class="text-purple-400 hover:text-purple-300 text-sm underline">
             Cursor Ritual
           </button>
           <span class="text-purple-500">•</span>
-          <button onclick="showConfigInstructions('claude')" class="text-purple-400 hover:text-purple-300 text-sm underline">
+          <button onclick="showConfigInstructions('claude')"
+            class="text-purple-400 hover:text-purple-300 text-sm underline">
             Claude Ritual
           </button>
           <span class="text-purple-500">•</span>
-          <button onclick="showConfigInstructions('windsurf')" class="text-purple-400 hover:text-purple-300 text-sm underline">
+          <button onclick="showConfigInstructions('windsurf')"
+            class="text-purple-400 hover:text-purple-300 text-sm underline">
             Windsurf Ritual
           </button>
         </div>
@@ -268,10 +375,8 @@
     <section class="mb-12 text-center">
       <div class="inline-block">
         <div class="coin-slot w-32 h-2 rounded-full mx-auto mb-4"></div>
-        <button
-          id="insert-coin"
-          class="mystical-token px-8 py-4 rounded-full text-xl font-bold hover:scale-110 transition-all cursor-pointer glow"
-        >
+        <button id="insert-coin"
+          class="mystical-token px-8 py-4 rounded-full text-xl font-bold hover:scale-110 transition-all cursor-pointer glow">
           🪙 INSERT COIN
         </button>
         <p class="mt-2 text-purple-400 text-sm" id="wishes-counter">
@@ -286,15 +391,13 @@
         <h2 class="creepy-font text-4xl text-center mb-6 text-purple-200">
           Gaze Into The Void
         </h2>
-        
+
         <!-- Namespace Selection -->
         <div class="mb-6">
           <p class="mystical-font text-lg text-purple-300 mb-3">
             Choose your cursed realms wisely...
           </p>
-          <div class="flex flex-wrap gap-2 mb-4" id="namespace-tokens">
-            <!-- Namespace tokens will be dynamically added here -->
-          </div>
+          <div id="namespace-tokens" class="flex flex-wrap gap-2"></div>
           <div class="flex gap-2">
             <button id="select-all-namespaces" class="text-sm text-purple-400 hover:text-purple-300">
               ✦ Summon All Realms ✦
@@ -306,21 +409,21 @@
         </div>
 
         <!-- Search Input -->
-        <div class="relative">
-          <input
-            type="text"
-            id="oracle-query"
-            class="w-full cursed-input py-4 px-6 rounded-lg text-lg text-purple-100"
-            placeholder="Whisper your darkest query..."
-          />
-          <button
-            id="consult-oracle"
-            class="absolute right-2 top-2 mystical-token px-6 py-2 rounded-md font-bold hover:scale-105 transition-transform"
-          >
-            🔮 Consult
-          </button>
+        <div id="oracle-controls" class="flex flex-col gap-4">
+          <div class="flex gap-2">
+            <input type="text" id="oracle-query" placeholder="Ask the Oracle..."
+              class="flex-1 bg-purple-900/30 border border-purple-700/50 rounded-lg px-4 py-2 text-purple-100 placeholder-purple-500 focus:outline-none focus:border-purple-500" />
+            <button id="consult-oracle"
+              class="bg-purple-900/50 hover:bg-purple-900/70 text-purple-300 px-4 py-2 rounded-lg transition-colors">
+              🔮 Consult
+            </button>
+            <button id="search-all"
+              class="bg-purple-900/50 hover:bg-purple-900/70 text-purple-300 px-4 py-2 rounded-lg transition-colors">
+              🔍 Search All Realms
+            </button>
+          </div>
         </div>
-        
+
         <p class="mt-4 text-center text-purple-400 italic" id="oracle-warning">
           Some memories were meant to stay buried...
         </p>
@@ -330,22 +433,16 @@
     <!-- Tabs Section -->
     <section class="max-w-6xl mx-auto mb-8 hidden" id="tabs-section">
       <div class="flex justify-center space-x-4 mb-6">
-        <button
-          data-tab="recent"
-          class="tab-button active mystical-token px-6 py-3 rounded-t-lg font-bold transition-all"
-        >
+        <button data-tab="recent"
+          class="tab-button active mystical-token px-6 py-3 rounded-t-lg font-bold transition-all">
           📅 Recent Visions
         </button>
-        <button
-          data-tab="search"
-          class="tab-button mystical-token px-6 py-3 rounded-t-lg font-bold transition-all opacity-60"
-        >
+        <button data-tab="search"
+          class="tab-button mystical-token px-6 py-3 rounded-t-lg font-bold transition-all opacity-60">
           🔮 Oracle Results
         </button>
-        <button
-          data-tab="browse"
-          class="tab-button mystical-token px-6 py-3 rounded-t-lg font-bold transition-all opacity-60"
-        >
+        <button data-tab="browse"
+          class="tab-button mystical-token px-6 py-3 rounded-t-lg font-bold transition-all opacity-60">
           📚 Cursed Archives
         </button>
       </div>
@@ -357,10 +454,11 @@
         <div id="memories-container" class="space-y-4">
           <!-- Memories will be dynamically loaded here -->
         </div>
-        
+
         <!-- Pagination -->
         <div id="pagination" class="mt-6 text-center hidden">
-          <button id="load-more" class="mystical-token px-8 py-3 rounded-md font-bold hover:scale-105 transition-transform">
+          <button id="load-more"
+            class="mystical-token px-8 py-3 rounded-md font-bold hover:scale-105 transition-transform">
             📜 Unroll More Scrolls...
           </button>
         </div>
@@ -378,7 +476,8 @@
     <div id="config-modal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden">
       <div class="flex items-center justify-center min-h-screen p-4">
         <div class="tarot-card max-w-2xl w-full p-8 rounded-lg relative max-h-[90vh] overflow-y-auto">
-          <button onclick="closeConfigModal()" class="absolute top-4 right-4 text-purple-300 hover:text-purple-100 text-2xl">
+          <button onclick="closeConfigModal()"
+            class="absolute top-4 right-4 text-purple-300 hover:text-purple-100 text-2xl">
             ✕
           </button>
           <h2 class="creepy-font text-3xl text-purple-300 mb-6">The Sacred Incantations</h2>
@@ -399,4 +498,5 @@
   <!-- Include the JavaScript -->
   <script src="oracle.js"></script>
 </body>
+
 </html>

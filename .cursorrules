@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mcp-memory-test": {
+      "url": "https://mcp-memory.loqwai.workers.dev/user/debug-user/sse",
+      "transport": "sse",
+      "description": "Test MCP Memory server for debugging"
+    }
+  }
+}
