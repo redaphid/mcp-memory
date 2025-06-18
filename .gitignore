@@ -179,3 +179,4 @@ dist
 .cursor/mcp.json
 *.bak
 mcp-config.json
+*.log

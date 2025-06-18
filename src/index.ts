@@ -667,6 +667,57 @@ app.post("/api/simple-test", async (c) => {
     }
 })
 
+// Debug endpoint for vectorize
+app.post("/api/debug-vector", async (c) => {
+    try {
+        const { text, namespace = "debug" } = await c.req.json()
+        
+        // Test embedding generation
+        const embeddings = await c.env.AI.run("@cf/baai/bge-m3", { text }) as any
+        const values = embeddings.data[0]
+        
+        if (!values) {
+            return c.json({ error: "Failed to generate embeddings" }, 500)
+        }
+        
+        // Test vector storage
+        const vectorId = crypto.randomUUID()
+        await c.env.VECTORIZE.upsert([{
+            id: vectorId,
+            values,
+            namespace,
+            metadata: { content: text }
+        }])
+        
+        // Test vector search
+        const searchResults = await c.env.VECTORIZE.query(values, {
+            namespace,
+            topK: 5,
+            returnMetadata: "all"
+        })
+        
+        return c.json({
+            success: true,
+            vectorId,
+            embeddingLength: values.length,
+            searchResults: {
+                count: searchResults.matches?.length || 0,
+                matches: searchResults.matches?.map(m => ({
+                    id: m.id,
+                    score: m.score,
+                    content: m.metadata?.content
+                }))
+            }
+        })
+    } catch (error) {
+        console.error("Debug vector error:", error)
+        return c.json({ 
+            error: "Vector operation failed", 
+            details: error instanceof Error ? error.message : String(error) 
+        }, 500)
+    }
+})
+
 // Fallback to static assets
 app.get("*", async (c) => {
     return c.env.ASSETS.fetch(c.req.raw)

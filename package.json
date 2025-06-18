@@ -8,7 +8,9 @@
 		"format": "biome format --write",
 		"lint:fix": "biome lint --fix",
 		"start": "wrangler dev",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"test": "vitest",
+		"test:run": "vitest run"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250421.0",
@@ -16,7 +18,10 @@
 		"@types/react": "^18.2.0",
 		"@types/react-dom": "^18.2.0",
 		"@types/uuid": "^10.0.0",
+		"@vitest/ui": "^3.2.4",
+		"happy-dom": "^18.0.1",
 		"typescript": "^5.5.2",
+		"vitest": "^3.2.4",
 		"workers-mcp": "^0.1.0-3",
 		"wrangler": "^4.6.0"
 	},

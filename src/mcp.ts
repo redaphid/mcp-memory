@@ -56,10 +56,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             async ({ thingToRemember, namespace }: { thingToRemember: string; namespace?: string }) => {
                 try {
                     const targetNamespace = namespace || this.props.namespace
-                    // Store in Vectorize using the refactored function
                     const memoryId = await storeMemory(thingToRemember, targetNamespace, env)
-
-                    // Also store content in D1 database
                     await storeMemoryInD1(thingToRemember, targetNamespace, env, memoryId)
 
                     console.log(
@@ -70,9 +67,9 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                         content: [{ type: "text", text: `Remembered in ${targetNamespace}: ${thingToRemember}` }]
                     }
                 } catch (error) {
-                    console.error("Error storing memory:", error)
+                    console.error("Error in addToMCPMemory:", error)
                     return {
-                        content: [{ type: "text", text: "Failed to remember: " + String(error) }]
+                        content: [{ type: "text", text: `Failed to remember: ${error}` }]
                     }
                 }
             }
@@ -120,31 +117,23 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                     const targetNamespace = namespace || this.props.namespace
                     console.log(`Searching in namespace '${targetNamespace}' with query: "${informationToGet}"`)
 
-                    // Use the refactored function to search memories
                     const memories = await searchMemories(informationToGet, targetNamespace, env)
-
                     console.log(`Search returned ${memories.length} matches`)
 
-                    if (memories.length > 0) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text:
-                                        `Found memories in ${targetNamespace}:\n` +
-                                        memories.map((m) => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n")
-                                }
-                            ]
-                        }
-                    }
+                    if (memories.length === 0)
+                        return { content: [{ type: "text", text: `No relevant memories found in ${targetNamespace}.` }] }
 
                     return {
-                        content: [{ type: "text", text: `No relevant memories found in ${targetNamespace}.` }]
+                        content: [{
+                            type: "text",
+                            text: `Found memories in ${targetNamespace}:\n` +
+                                  memories.map(m => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n")
+                        }]
                     }
                 } catch (error) {
-                    console.error("Error searching memories:", error)
+                    console.error("Error in searchMCPMemory:", error)
                     return {
-                        content: [{ type: "text", text: "Failed to search memories: " + String(error) }]
+                        content: [{ type: "text", text: `Search failed: ${error}` }]
                     }
                 }
             }
@@ -158,68 +147,40 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                 query: z.string().describe("The search query to find relevant memories")
             },
             async ({ query }: { query: string }) => {
-                try {
-                    console.log(`Searching across all namespaces with query: "${query}"`)
+                console.log(`Searching across all namespaces with query: "${query}"`)
 
-                    // Get all namespaces
-                    const result = await env.DB.prepare(
-                        `
-            SELECT DISTINCT namespace FROM memories
-          `
-                    ).all()
+                const result = await env.DB.prepare(`SELECT DISTINCT namespace FROM memories`).all()
+                const allResults = []
 
-                    const allResults = []
-
-                    // Search each namespace
-                    if (result.results) {
-                        for (const row of result.results) {
-                            const namespace = (row as any).namespace
-                            try {
-                                const memories = await searchMemories(query, namespace, env)
-                                if (memories.length > 0) {
-                                    allResults.push({
-                                        namespace,
-                                        memories: memories.map((m) => ({
-                                            content: m.content,
-                                            score: m.score
-                                        }))
-                                    })
-                                }
-                            } catch (error) {
-                                console.error(`Error searching namespace ${namespace}:`, error)
+                if (result.results) {
+                    for (const row of result.results) {
+                        const namespace = (row as any).namespace
+                        try {
+                            const memories = await searchMemories(query, namespace, env)
+                            if (memories.length > 0) {
+                                allResults.push({
+                                    namespace,
+                                    memories: memories.map(m => ({ content: m.content, score: m.score }))
+                                })
                             }
+                        } catch (error) {
+                            console.error(`Error searching namespace ${namespace}:`, error)
                         }
                     }
+                }
 
-                    if (allResults.length > 0) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text:
-                                        "Found memories across all namespaces:\n" +
-                                        allResults
-                                            .map(
-                                                (result) =>
-                                                    `\nIn ${result.namespace}:\n` +
-                                                    result.memories
-                                                        .map((m) => `${m.content} (score: ${m.score.toFixed(4)})`)
-                                                        .join("\n")
-                                            )
-                                            .join("\n")
-                                }
-                            ]
-                        }
-                    }
+                if (allResults.length === 0)
+                    return { content: [{ type: "text", text: "No relevant memories found across any namespace." }] }
 
-                    return {
-                        content: [{ type: "text", text: "No relevant memories found across any namespace." }]
-                    }
-                } catch (error) {
-                    console.error("Error searching all memories:", error)
-                    return {
-                        content: [{ type: "text", text: "Failed to search memories: " + String(error) }]
-                    }
+                return {
+                    content: [{
+                        type: "text",
+                        text: "Found memories across all namespaces:\n" +
+                              allResults.map(result =>
+                                  `\nIn ${result.namespace}:\n` +
+                                  result.memories.map(m => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n")
+                              ).join("\n")
+                    }]
                 }
             }
         )
