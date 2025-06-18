@@ -74,6 +74,11 @@ export class MCPSSEServer {
                                         thingToRemember: {
                                             type: "string",
                                             description: "The information to remember"
+                                        },
+                                        namespace: {
+                                            type: "string",
+                                            description:
+                                                "Optional namespace to store the memory in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
                                         }
                                     },
                                     required: ["thingToRemember"]
@@ -88,6 +93,11 @@ export class MCPSSEServer {
                                         informationToGet: {
                                             type: "string",
                                             description: "The information to search for"
+                                        },
+                                        namespace: {
+                                            type: "string",
+                                            description:
+                                                "Optional namespace to search in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
                                         }
                                     },
                                     required: ["informationToGet"]
@@ -166,6 +176,11 @@ export class MCPSSEServer {
                                             thingToRemember: {
                                                 type: "string",
                                                 description: "The information to remember"
+                                            },
+                                            namespace: {
+                                                type: "string",
+                                                description:
+                                                    "Optional namespace to store the memory in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
                                             }
                                         },
                                         required: ["thingToRemember"]
@@ -180,6 +195,11 @@ export class MCPSSEServer {
                                             informationToGet: {
                                                 type: "string",
                                                 description: "The information to search for"
+                                            },
+                                            namespace: {
+                                                type: "string",
+                                                description:
+                                                    "Optional namespace to search in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
                                             }
                                         },
                                         required: ["informationToGet"]
@@ -238,11 +258,12 @@ export class MCPSSEServer {
         try {
             switch (name) {
                 case "addToMCPMemory":
-                    const { thingToRemember } = args
-                    const memoryId = await storeMemory(thingToRemember, this.namespace, this.env)
-                    await storeMemoryInD1(thingToRemember, this.namespace, this.env, memoryId)
+                    const { thingToRemember, namespace: customNamespace } = args
+                    const targetNamespace = customNamespace || this.namespace
+                    const memoryId = await storeMemory(thingToRemember, targetNamespace, this.env)
+                    await storeMemoryInD1(thingToRemember, targetNamespace, this.env, memoryId)
 
-                    console.log(`Memory stored successfully in namespace '${this.namespace}' with ID: ${memoryId}`)
+                    console.log(`Memory stored successfully in namespace '${targetNamespace}' with ID: ${memoryId}`)
 
                     return {
                         jsonrpc: "2.0",
@@ -251,15 +272,16 @@ export class MCPSSEServer {
                             content: [
                                 {
                                     type: "text",
-                                    text: `Remembered in ${this.namespace}: ${thingToRemember}`
+                                    text: `Remembered in ${targetNamespace}: ${thingToRemember}`
                                 }
                             ]
                         }
                     }
 
                 case "searchMCPMemory":
-                    const { informationToGet } = args
-                    const memories = await searchMemories(informationToGet, this.namespace, this.env)
+                    const { informationToGet, namespace: searchNamespace } = args
+                    const searchTargetNamespace = searchNamespace || this.namespace
+                    const memories = await searchMemories(informationToGet, searchTargetNamespace, this.env)
 
                     console.log(`Search returned ${memories.length} matches`)
 
@@ -272,7 +294,7 @@ export class MCPSSEServer {
                                     {
                                         type: "text",
                                         text:
-                                            `Found memories in ${this.namespace}:\n` +
+                                            `Found memories in ${searchTargetNamespace}:\n` +
                                             memories
                                                 .map((m) => `${m.content} (score: ${m.score.toFixed(4)})`)
                                                 .join("\n")
@@ -288,7 +310,7 @@ export class MCPSSEServer {
                                 content: [
                                     {
                                         type: "text",
-                                        text: `No relevant memories found in ${this.namespace}.`
+                                        text: `No relevant memories found in ${searchTargetNamespace}.`
                                     }
                                 ]
                             }

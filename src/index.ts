@@ -534,48 +534,68 @@ app.all("/project/:projectId/sse", async (c) => {
         return new Response("Bad Request: Missing projectId", { status: 400 })
     }
 
-    const ctx = {
-        props: {
-            namespace: `project:${projectId}`,
-            namespaceType: "project" as const
-        }
-    }
+    const namespace = `project:${projectId}`
+    const mcpServer = new MCPSSEServer(namespace, c.env)
 
     try {
-        const response = await MyMCP.mount(`/project/${projectId}/sse`).fetch(c.req.raw, c.env, ctx)
-        if (response) {
-            return response
+        if (c.req.method === "GET") {
+            // Handle SSE connection
+            console.log("Handling SSE connection for namespace:", namespace)
+            return await mcpServer.handleSSEConnection()
+        } else if (c.req.method === "POST") {
+            // Handle JSON-RPC request
+            const body = await c.req.json()
+            console.log("Handling JSON-RPC request:", body)
+            const response = await mcpServer.handleJSONRPCRequest(body)
+            return new Response(JSON.stringify(response), {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type"
+                }
+            })
+        } else {
+            return new Response("Method Not Allowed", { status: 405 })
         }
     } catch (error) {
         console.error("MCP error:", error)
         return new Response("Internal Server Error: MCP failed", { status: 500 })
     }
-
-    return new Response("Not Found in MCP", { status: 404 })
 })
 
 // Handle MCP SSE endpoint for organization-wide namespace
 app.all("/all/sse", async (c) => {
     console.log("=== ALL SSE ENDPOINT ===")
 
-    const ctx = {
-        props: {
-            namespace: "all",
-            namespaceType: "all" as const
-        }
-    }
+    const namespace = "all"
+    const mcpServer = new MCPSSEServer(namespace, c.env)
 
     try {
-        const response = await MyMCP.mount("/all/sse").fetch(c.req.raw, c.env, ctx)
-        if (response) {
-            return response
+        if (c.req.method === "GET") {
+            // Handle SSE connection
+            console.log("Handling SSE connection for namespace:", namespace)
+            return await mcpServer.handleSSEConnection()
+        } else if (c.req.method === "POST") {
+            // Handle JSON-RPC request
+            const body = await c.req.json()
+            console.log("Handling JSON-RPC request:", body)
+            const response = await mcpServer.handleJSONRPCRequest(body)
+            return new Response(JSON.stringify(response), {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type"
+                }
+            })
+        } else {
+            return new Response("Method Not Allowed", { status: 405 })
         }
     } catch (error) {
         console.error("MCP error:", error)
         return new Response("Internal Server Error: MCP failed", { status: 500 })
     }
-
-    return new Response("Not Found in MCP", { status: 404 })
 })
 
 // Serve admin page

@@ -44,21 +44,30 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
       The namespace would be: project:myproject
 
       This tool must be invoked through a function call - it is not a passive resource but an active storage mechanism.`,
-            { thingToRemember: z.string().describe("No description") },
-            async ({ thingToRemember }) => {
+            {
+                thingToRemember: z.string().describe("The information to remember"),
+                namespace: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Optional namespace to store the memory in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+                    )
+            },
+            async ({ thingToRemember, namespace }: { thingToRemember: string; namespace?: string }) => {
                 try {
+                    const targetNamespace = namespace || this.props.namespace
                     // Store in Vectorize using the refactored function
-                    const memoryId = await storeMemory(thingToRemember, this.props.namespace, env)
+                    const memoryId = await storeMemory(thingToRemember, targetNamespace, env)
 
                     // Also store content in D1 database
-                    await storeMemoryInD1(thingToRemember, this.props.namespace, env, memoryId)
+                    await storeMemoryInD1(thingToRemember, targetNamespace, env, memoryId)
 
                     console.log(
-                        `Memory stored successfully in namespace '${this.props.namespace}' with ID: ${memoryId}, content: "${thingToRemember}"`
+                        `Memory stored successfully in namespace '${targetNamespace}' with ID: ${memoryId}, content: "${thingToRemember}"`
                     )
 
                     return {
-                        content: [{ type: "text", text: `Remembered in ${this.props.namespace}: ${thingToRemember}` }]
+                        content: [{ type: "text", text: `Remembered in ${targetNamespace}: ${thingToRemember}` }]
                     }
                 } catch (error) {
                     console.error("Error storing memory:", error)
@@ -97,13 +106,22 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
       The namespace would be: project:myproject
 
       This tool must be explicitly invoked through a function call - it is not a passive resource but an active search mechanism.`,
-            { informationToGet: z.string().describe("No description") },
-            async ({ informationToGet }) => {
+            {
+                informationToGet: z.string().describe("The information to search for"),
+                namespace: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Optional namespace to search in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+                    )
+            },
+            async ({ informationToGet, namespace }: { informationToGet: string; namespace?: string }) => {
                 try {
-                    console.log(`Searching in namespace '${this.props.namespace}' with query: "${informationToGet}"`)
+                    const targetNamespace = namespace || this.props.namespace
+                    console.log(`Searching in namespace '${targetNamespace}' with query: "${informationToGet}"`)
 
                     // Use the refactored function to search memories
-                    const memories = await searchMemories(informationToGet, this.props.namespace, env)
+                    const memories = await searchMemories(informationToGet, targetNamespace, env)
 
                     console.log(`Search returned ${memories.length} matches`)
 
@@ -113,7 +131,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                                 {
                                     type: "text",
                                     text:
-                                        `Found memories in ${this.props.namespace}:\n` +
+                                        `Found memories in ${targetNamespace}:\n` +
                                         memories.map((m) => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n")
                                 }
                             ]
@@ -121,7 +139,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                     }
 
                     return {
-                        content: [{ type: "text", text: `No relevant memories found in ${this.props.namespace}.` }]
+                        content: [{ type: "text", text: `No relevant memories found in ${targetNamespace}.` }]
                     }
                 } catch (error) {
                     console.error("Error searching memories:", error)
@@ -139,7 +157,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             {
                 query: z.string().describe("The search query to find relevant memories")
             },
-            async ({ query }) => {
+            async ({ query }: { query: string }) => {
                 try {
                     console.log(`Searching across all namespaces with query: "${query}"`)
 
