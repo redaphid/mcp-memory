@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { McpAgent } from "agents/mcp"
 import { z } from "zod"
-import { storeMemoryInD1 } from "./utils/db"
-import { searchMemories, storeMemory } from "./utils/vectorize"
+import { storeMemoryInD1, deleteMemoryFromD1 } from "./utils/db"
+import { searchMemories, storeMemory, deleteVectorById } from "./utils/vectorize"
 import { version } from "../package.json"
 
 type MyMCPProps = {
@@ -201,8 +201,6 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             async ({ memoryId, namespace }: { memoryId: string; namespace?: string }) => {
                 try {
                     const targetNamespace = namespace || this.props.namespace
-                    const { deleteMemoryFromD1 } = await import("./utils/db")
-                    const { deleteVectorById } = await import("./utils/vectorize")
                     
                     // Delete from both D1 and Vectorize
                     await deleteMemoryFromD1(memoryId, targetNamespace, env)
@@ -238,7 +236,6 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                     
                     // Delete all vectors for this namespace
                     if (memories.results && memories.results.length > 0) {
-                        const { deleteVectorById } = await import("./utils/vectorize")
                         for (const row of memories.results) {
                             const memoryId = (row as any).id
                             try {

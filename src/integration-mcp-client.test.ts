@@ -127,7 +127,7 @@ describe("MCP Memory Integration Tests with Official SDK", () => {
             // Search for the memory to get its ID from the REST endpoint (since MCP doesn't return IDs)
             // Note: In a real implementation, the MCP tools might return IDs or have a listMemories tool
             const memoriesResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`)
-            const memoriesData = await memoriesResponse.json()
+            const memoriesData = await memoriesResponse.json() as any
             const memoryToDelete = memoriesData.memories.find((m: any) => m.content === deleteTestMemory)
             
             expect(memoryToDelete).toBeDefined()
