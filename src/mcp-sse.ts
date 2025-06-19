@@ -1,5 +1,5 @@
-import { searchMemories, storeMemory } from "./utils/vectorize"
-import { storeMemoryInD1 } from "./utils/db"
+import { searchMemories, storeMemory, deleteVectorById } from "./utils/vectorize"
+import { storeMemoryInD1, deleteMemoryFromD1 } from "./utils/db"
 
 export interface MCPRequest {
     jsonrpc: "2.0"
@@ -116,6 +116,38 @@ export class MCPSSEServer {
                                     },
                                     required: ["query"]
                                 }
+                            },
+                            {
+                                name: "deleteMemory",
+                                description: "Delete a specific memory by its ID from the current namespace",
+                                inputSchema: {
+                                    type: "object",
+                                    properties: {
+                                        memoryId: {
+                                            type: "string",
+                                            description: "The ID of the memory to delete"
+                                        },
+                                        namespace: {
+                                            type: "string",
+                                            description: "Optional namespace to delete from (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+                                        }
+                                    },
+                                    required: ["memoryId"]
+                                }
+                            },
+                            {
+                                name: "deleteNamespace",
+                                description: "Delete an entire namespace and all its memories. Use with caution as this action cannot be undone.",
+                                inputSchema: {
+                                    type: "object",
+                                    properties: {
+                                        namespace: {
+                                            type: "string",
+                                            description: "The namespace to delete (e.g., 'user:alice', 'project:frontend')"
+                                        }
+                                    },
+                                    required: ["namespace"]
+                                }
                             }
                         ]
                     }
@@ -218,6 +250,38 @@ export class MCPSSEServer {
                                         },
                                         required: ["query"]
                                     }
+                                },
+                                {
+                                    name: "deleteMemory",
+                                    description: "Delete a specific memory by its ID from the current namespace",
+                                    inputSchema: {
+                                        type: "object",
+                                        properties: {
+                                            memoryId: {
+                                                type: "string",
+                                                description: "The ID of the memory to delete"
+                                            },
+                                            namespace: {
+                                                type: "string",
+                                                description: "Optional namespace to delete from (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+                                            }
+                                        },
+                                        required: ["memoryId"]
+                                    }
+                                },
+                                {
+                                    name: "deleteNamespace",
+                                    description: "Delete an entire namespace and all its memories. Use with caution as this action cannot be undone.",
+                                    inputSchema: {
+                                        type: "object",
+                                        properties: {
+                                            namespace: {
+                                                type: "string",
+                                                description: "The namespace to delete (e.g., 'user:alice', 'project:frontend')"
+                                            }
+                                        },
+                                        required: ["namespace"]
+                                    }
                                 }
                             ]
                         }
@@ -315,6 +379,80 @@ export class MCPSSEServer {
                                 ]
                             }
                         }
+                    }
+
+                case "deleteMemory":
+                    const { memoryId, namespace: deleteNamespace } = args
+                    const deleteTargetNamespace = deleteNamespace || this.namespace
+                    
+                    try {
+                        // Delete from both D1 and Vectorize
+                        await deleteMemoryFromD1(memoryId, deleteTargetNamespace, this.env)
+                        await deleteVectorById(memoryId, deleteTargetNamespace, this.env)
+                        
+                        console.log(`Memory ${memoryId} deleted from namespace '${deleteTargetNamespace}'`)
+                        
+                        return {
+                            jsonrpc: "2.0",
+                            id: request.id,
+                            result: {
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: `Memory ${memoryId} deleted from ${deleteTargetNamespace}`
+                                    }
+                                ]
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error in deleteMemory:", error)
+                        throw new Error(`Failed to delete memory: ${error}`)
+                    }
+
+                case "deleteNamespace":
+                    const { namespace: namespaceToDelete } = args
+                    
+                    try {
+                        // Get all memories in the namespace first
+                        const memories = await this.env.DB.prepare(
+                            "SELECT id FROM memories WHERE namespace = ?"
+                        ).bind(namespaceToDelete).all()
+                        
+                        // Delete all vectors for this namespace
+                        if (memories.results && memories.results.length > 0) {
+                            for (const row of memories.results) {
+                                const memoryId = (row as any).id
+                                try {
+                                    await deleteVectorById(memoryId, namespaceToDelete, this.env)
+                                } catch (error) {
+                                    console.error(`Error deleting vector ${memoryId}:`, error)
+                                }
+                            }
+                        }
+                        
+                        // Delete all memories from D1
+                        const deleteResult = await this.env.DB.prepare(
+                            "DELETE FROM memories WHERE namespace = ?"
+                        ).bind(namespaceToDelete).run()
+                        
+                        const deletedCount = deleteResult.meta?.changes || 0
+                        console.log(`Deleted ${deletedCount} memories from namespace '${namespaceToDelete}'`)
+                        
+                        return {
+                            jsonrpc: "2.0",
+                            id: request.id,
+                            result: {
+                                content: [
+                                    {
+                                        type: "text",
+                                        text: `Namespace ${namespaceToDelete} deleted with ${deletedCount} memories`
+                                    }
+                                ]
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error in deleteNamespace:", error)
+                        throw new Error(`Failed to delete namespace: ${error}`)
                     }
 
                 case "searchAllMemories":
