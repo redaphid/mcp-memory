@@ -10,17 +10,25 @@ export async function initializeDatabase(env: Env) {
         const result = await env.DB.prepare("PRAGMA table_info(memories)").all()
         const columns = result.results as Array<{ name: string }>
         const hasNamespace = columns.some((col) => col.name === "namespace")
+        const hasDeletedAt = columns.some((col) => col.name === "deleted_at")
 
         if (!hasNamespace) {
             console.log("Adding namespace column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN namespace TEXT DEFAULT 'user:unknown'")
             console.log("Added namespace column to memories table.")
         }
+
+        if (!hasDeletedAt) {
+            console.log("Adding deleted_at column to memories table...")
+            await env.DB.exec("ALTER TABLE memories ADD COLUMN deleted_at TEXT DEFAULT NULL")
+            console.log("Added deleted_at column to memories table.")
+        }
     } catch (e) {
-        console.error("Error checking/adding namespace column:", e)
+        console.error("Error checking/adding columns:", e)
     }
 
     await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_namespace ON memories(namespace)")
+    await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_deleted_at ON memories(deleted_at)")
 }
 
 export async function storeMemoryInD1(
@@ -40,7 +48,7 @@ export async function storeMemoryInD1(
 
 export async function getAllMemoriesFromD1(namespace: string, env: Env) {
     const result = await env.DB.prepare(
-        "SELECT id, content FROM memories WHERE namespace = ? ORDER BY created_at DESC"
+        "SELECT id, content FROM memories WHERE namespace = ? AND deleted_at IS NULL ORDER BY created_at DESC"
     )
         .bind(namespace)
         .all()
@@ -49,8 +57,11 @@ export async function getAllMemoriesFromD1(namespace: string, env: Env) {
 }
 
 export async function deleteMemoryFromD1(memoryId: string, namespace: string, env: Env) {
-    await env.DB.prepare("DELETE FROM memories WHERE id = ? AND namespace = ?").bind(memoryId, namespace).run()
-    console.log(`Memory ${memoryId} deleted from D1 in namespace: ${namespace}`)
+    const deletedAt = new Date().toISOString()
+    await env.DB.prepare("UPDATE memories SET deleted_at = ? WHERE id = ? AND namespace = ? AND deleted_at IS NULL")
+        .bind(deletedAt, memoryId, namespace)
+        .run()
+    console.log(`Memory ${memoryId} soft-deleted from D1 in namespace: ${namespace}`)
 }
 
 export async function updateMemoryInD1(
@@ -59,11 +70,15 @@ export async function updateMemoryInD1(
     newContent: string,
     env: Env
 ) {
-    const stmt = env.DB.prepare("UPDATE memories SET content = ? WHERE id = ? AND namespace = ?")
+    const stmt = env.DB.prepare("UPDATE memories SET content = ? WHERE id = ? AND namespace = ? AND deleted_at IS NULL")
     const result = await stmt.bind(newContent, memoryId, namespace).run()
 
     if (!result.meta || result.meta.changes === 0)
-        throw new Error(`Memory with ID ${memoryId} not found in namespace ${namespace} or content unchanged.`)
+        throw new Error(`Memory with ID ${memoryId} not found in namespace ${namespace} or content unchanged (may have been deleted).`)
 
     console.log(`Memory ${memoryId} updated in D1 in namespace: ${namespace}`)
+}
+
+export async function getDeletedMemoriesFromD1(namespace: string, env: Env) {
+    return []
 }

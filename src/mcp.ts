@@ -149,7 +149,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             async ({ query }: { query: string }) => {
                 console.log(`Searching across all namespaces with query: "${query}"`)
 
-                const result = await env.DB.prepare(`SELECT DISTINCT namespace FROM memories`).all()
+                const result = await env.DB.prepare(`SELECT DISTINCT namespace FROM memories WHERE deleted_at IS NULL`).all()
                 const allResults = []
 
                 if (result.results) {
@@ -229,9 +229,9 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             },
             async ({ namespace }: { namespace: string }) => {
                 try {
-                    // Get all memories in the namespace first
+                    // Get all memories in the namespace first (excluding already deleted)
                     const memories = await env.DB.prepare(
-                        "SELECT id FROM memories WHERE namespace = ?"
+                        "SELECT id FROM memories WHERE namespace = ? AND deleted_at IS NULL"
                     ).bind(namespace).all()
                     
                     // Delete all vectors for this namespace
@@ -246,10 +246,11 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                         }
                     }
                     
-                    // Delete all memories from D1
+                    // Soft delete all memories from D1
+                    const deletedAt = new Date().toISOString()
                     const deleteResult = await env.DB.prepare(
-                        "DELETE FROM memories WHERE namespace = ?"
-                    ).bind(namespace).run()
+                        "UPDATE memories SET deleted_at = ? WHERE namespace = ? AND deleted_at IS NULL"
+                    ).bind(deletedAt, namespace).run()
                     
                     const deletedCount = deleteResult.meta?.changes || 0
                     console.log(`Deleted ${deletedCount} memories from namespace '${namespace}'`)

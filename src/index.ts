@@ -260,7 +260,7 @@ app.get("/:namespaceType/:namespaceId/memories", async (c) => {
 
     try {
         // Get total count
-        const countResult = await c.env.DB.prepare("SELECT COUNT(*) as total FROM memories WHERE namespace = ?")
+        const countResult = await c.env.DB.prepare("SELECT COUNT(*) as total FROM memories WHERE namespace = ? AND deleted_at IS NULL")
             .bind(namespace)
             .first()
 
@@ -270,7 +270,7 @@ app.get("/:namespaceType/:namespaceId/memories", async (c) => {
         const orderBy = sortBy === "date" ? "created_at DESC" : "created_at DESC"
         const memories = await c.env.DB.prepare(
             `SELECT id, content, created_at FROM memories
-       WHERE namespace = ?
+       WHERE namespace = ? AND deleted_at IS NULL
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
         )
