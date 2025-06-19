@@ -8,7 +8,7 @@ import {
     updateMemoryInD1,
     storeMemoryInD1
 } from "./utils/db"
-import { deleteVectorById, updateMemoryVector, searchMemories } from "./utils/vectorize"
+import { deleteVectorById, updateMemoryVector, searchMemories, storeMemory } from "./utils/vectorize"
 
 const app = new Hono<{
     Bindings: Env
@@ -38,9 +38,6 @@ app.get("/", async (c) => await c.env.ASSETS.fetch(c.req.raw))
 // Test endpoint to create sample data
 app.post("/api/test-data", async (c) => {
     try {
-        const { storeMemoryInD1 } = await import("./utils/db")
-        const { storeMemory } = await import("./utils/vectorize")
-
         // Create some test memories
         const testMemories = [
             { content: "User Alice loves JavaScript and React", namespace: "user:alice" },
@@ -387,7 +384,7 @@ app.post("/search/:namespaceType/:namespaceId", async (c) => {
             success: true,
             namespace,
             query,
-            memories
+            results: memories
         })
     } catch (error) {
         console.error(`Error searching memories in namespace ${namespace}:`, error)
@@ -671,38 +668,40 @@ app.post("/api/simple-test", async (c) => {
 app.post("/api/debug-vector", async (c) => {
     try {
         const { text, namespace = "debug" } = await c.req.json()
-        
+
         // Test embedding generation
-        const embeddings = await c.env.AI.run("@cf/baai/bge-m3", { text }) as any
+        const embeddings = (await c.env.AI.run("@cf/baai/bge-m3", { text })) as any
         const values = embeddings.data[0]
-        
+
         if (!values) {
             return c.json({ error: "Failed to generate embeddings" }, 500)
         }
-        
+
         // Test vector storage
         const vectorId = crypto.randomUUID()
-        await c.env.VECTORIZE.upsert([{
-            id: vectorId,
-            values,
-            namespace,
-            metadata: { content: text }
-        }])
-        
+        await c.env.VECTORIZE.upsert([
+            {
+                id: vectorId,
+                values,
+                namespace,
+                metadata: { content: text }
+            }
+        ])
+
         // Test vector search
         const searchResults = await c.env.VECTORIZE.query(values, {
             namespace,
             topK: 5,
             returnMetadata: "all"
         })
-        
+
         return c.json({
             success: true,
             vectorId,
             embeddingLength: values.length,
             searchResults: {
                 count: searchResults.matches?.length || 0,
-                matches: searchResults.matches?.map(m => ({
+                matches: searchResults.matches?.map((m) => ({
                     id: m.id,
                     score: m.score,
                     content: m.metadata?.content
@@ -711,10 +710,13 @@ app.post("/api/debug-vector", async (c) => {
         })
     } catch (error) {
         console.error("Debug vector error:", error)
-        return c.json({ 
-            error: "Vector operation failed", 
-            details: error instanceof Error ? error.message : String(error) 
-        }, 500)
+        return c.json(
+            {
+                error: "Vector operation failed",
+                details: error instanceof Error ? error.message : String(error)
+            },
+            500
+        )
     }
 })
 
