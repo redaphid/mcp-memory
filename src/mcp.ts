@@ -184,5 +184,89 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                 }
             }
         )
+
+        // Add delete memory tool
+        this.server.tool(
+            "deleteMemory",
+            "This tool deletes a specific memory by its ID from the current namespace. Use when you need to remove outdated or incorrect information.",
+            {
+                memoryId: z.string().describe("The ID of the memory to delete"),
+                namespace: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Optional namespace to delete from (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+                    )
+            },
+            async ({ memoryId, namespace }: { memoryId: string; namespace?: string }) => {
+                try {
+                    const targetNamespace = namespace || this.props.namespace
+                    const { deleteMemoryFromD1 } = await import("./utils/db")
+                    const { deleteVectorById } = await import("./utils/vectorize")
+                    
+                    // Delete from both D1 and Vectorize
+                    await deleteMemoryFromD1(memoryId, targetNamespace, env)
+                    await deleteVectorById(memoryId, targetNamespace, env)
+                    
+                    console.log(`Memory ${memoryId} deleted from namespace '${targetNamespace}'`)
+                    
+                    return {
+                        content: [{ type: "text", text: `Memory ${memoryId} deleted from ${targetNamespace}` }]
+                    }
+                } catch (error) {
+                    console.error("Error in deleteMemory:", error)
+                    return {
+                        content: [{ type: "text", text: `Failed to delete memory: ${error}` }]
+                    }
+                }
+            }
+        )
+
+        // Add delete namespace tool
+        this.server.tool(
+            "deleteNamespace",
+            "This tool deletes an entire namespace and all its memories. Use with caution as this action cannot be undone.",
+            {
+                namespace: z.string().describe("The namespace to delete (e.g., 'user:alice', 'project:frontend')")
+            },
+            async ({ namespace }: { namespace: string }) => {
+                try {
+                    // Get all memories in the namespace first
+                    const memories = await env.DB.prepare(
+                        "SELECT id FROM memories WHERE namespace = ?"
+                    ).bind(namespace).all()
+                    
+                    // Delete all vectors for this namespace
+                    if (memories.results && memories.results.length > 0) {
+                        const { deleteVectorById } = await import("./utils/vectorize")
+                        for (const row of memories.results) {
+                            const memoryId = (row as any).id
+                            try {
+                                await deleteVectorById(memoryId, namespace, env)
+                            } catch (error) {
+                                console.error(`Error deleting vector ${memoryId}:`, error)
+                            }
+                        }
+                    }
+                    
+                    // Delete all memories from D1
+                    const deleteResult = await env.DB.prepare(
+                        "DELETE FROM memories WHERE namespace = ?"
+                    ).bind(namespace).run()
+                    
+                    const deletedCount = deleteResult.meta?.changes || 0
+                    console.log(`Deleted ${deletedCount} memories from namespace '${namespace}'`)
+                    
+                    return {
+                        content: [{ type: "text", text: `Namespace ${namespace} deleted with ${deletedCount} memories` }]
+                    }
+                } catch (error) {
+                    console.error("Error in deleteNamespace:", error)
+                    return {
+                        content: [{ type: "text", text: `Failed to delete namespace: ${error}` }]
+                    }
+                }
+            }
+        )
     }
 }
