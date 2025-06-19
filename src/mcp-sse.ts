@@ -382,15 +382,15 @@ export class MCPSSEServer {
                     }
 
                 case "deleteMemory":
-                    const { memoryId, namespace: deleteNamespace } = args
+                    const { memoryId: deleteMemoryId, namespace: deleteNamespace } = args
                     const deleteTargetNamespace = deleteNamespace || this.namespace
                     
                     try {
                         // Delete from both D1 and Vectorize
-                        await deleteMemoryFromD1(memoryId, deleteTargetNamespace, this.env)
-                        await deleteVectorById(memoryId, deleteTargetNamespace, this.env)
+                        await deleteMemoryFromD1(deleteMemoryId, deleteTargetNamespace, this.env)
+                        await deleteVectorById(deleteMemoryId, deleteTargetNamespace, this.env)
                         
-                        console.log(`Memory ${memoryId} deleted from namespace '${deleteTargetNamespace}'`)
+                        console.log(`Memory ${deleteMemoryId} deleted from namespace '${deleteTargetNamespace}'`)
                         
                         return {
                             jsonrpc: "2.0",
@@ -399,7 +399,7 @@ export class MCPSSEServer {
                                 content: [
                                     {
                                         type: "text",
-                                        text: `Memory ${memoryId} deleted from ${deleteTargetNamespace}`
+                                        text: `Memory ${deleteMemoryId} deleted from ${deleteTargetNamespace}`
                                     }
                                 ]
                             }
