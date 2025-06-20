@@ -67,7 +67,7 @@ Response:`,
         })
         
         try {
-            const aiResult = JSON.parse(aiResponse.response)
+            const aiResult = JSON.parse((aiResponse as any).response)
             if (aiResult.tags && Array.isArray(aiResult.tags)) {
                 result.tags.push(...aiResult.tags.filter((tag: string) => tag.startsWith('#')))
             }

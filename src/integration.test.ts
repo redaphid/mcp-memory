@@ -63,7 +63,7 @@ describe("MCP Memory Integration Tests", () => {
 
             const data = await parseMcp(response)
             expect(data.result.tools).toBeDefined()
-            expect(data.result.tools!.length).toBe(5)
+            expect(data.result.tools!.length).toBe(8)
 
             const toolNames = data.result.tools!.map((t) => t.name)
             expect(toolNames).toContain("addToMCPMemory")
@@ -71,6 +71,9 @@ describe("MCP Memory Integration Tests", () => {
             expect(toolNames).toContain("searchAllMemories")
             expect(toolNames).toContain("deleteMemory")
             expect(toolNames).toContain("deleteNamespace")
+            expect(toolNames).toContain("rememberHowTo")
+            expect(toolNames).toContain("findHowTo")
+            expect(toolNames).toContain("listCapabilities")
         })
 
         describe("Memory operations", () => {

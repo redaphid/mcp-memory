@@ -59,9 +59,6 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                     const memoryId = await storeMemory(thingToRemember, targetNamespace, env)
                     await storeMemoryInD1(thingToRemember, targetNamespace, env, memoryId)
 
-                    console.log(
-                        `Memory stored successfully in namespace '${targetNamespace}' with ID: ${memoryId}, content: "${thingToRemember}"`
-                    )
 
                     return {
                         content: [{ type: "text", text: `Remembered in ${targetNamespace}: ${thingToRemember}` }]
@@ -115,10 +112,8 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             async ({ informationToGet, namespace }: { informationToGet: string; namespace?: string }) => {
                 try {
                     const targetNamespace = namespace || this.props.namespace
-                    console.log(`Searching in namespace '${targetNamespace}' with query: "${informationToGet}"`)
 
                     const memories = await searchMemories(informationToGet, targetNamespace, env)
-                    console.log(`Search returned ${memories.length} matches`)
 
                     if (memories.length === 0)
                         return { content: [{ type: "text", text: `No relevant memories found in ${targetNamespace}.` }] }
@@ -147,7 +142,6 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                 query: z.string().describe("The search query to find relevant memories")
             },
             async ({ query }: { query: string }) => {
-                console.log(`Searching across all namespaces with query: "${query}"`)
 
                 const result = await env.DB.prepare(`SELECT DISTINCT namespace FROM memories WHERE deleted_at IS NULL`).all()
                 const allResults = []
@@ -206,7 +200,6 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                     await deleteMemoryFromD1(memoryId, targetNamespace, env)
                     await deleteVectorById(memoryId, targetNamespace, env)
                     
-                    console.log(`Memory ${memoryId} deleted from namespace '${targetNamespace}'`)
                     
                     return {
                         content: [{ type: "text", text: `Memory ${memoryId} deleted from ${targetNamespace}` }]
@@ -253,7 +246,6 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
                     ).bind(deletedAt, namespace).run()
                     
                     const deletedCount = deleteResult.meta?.changes || 0
-                    console.log(`Deleted ${deletedCount} memories from namespace '${namespace}'`)
                     
                     return {
                         content: [{ type: "text", text: `Namespace ${namespace} deleted with ${deletedCount} memories` }]

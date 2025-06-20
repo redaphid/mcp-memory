@@ -21,10 +21,8 @@ let dbInitialized = false
 app.use("*", async (c, next) => {
     if (!dbInitialized) {
         try {
-            console.log("Attempting database initialization...")
             await initializeDatabase(c.env)
             dbInitialized = true
-            console.log("Database initialized successfully.")
         } catch (e) {
             console.error("Failed to initialize D1 database:", e)
         }
@@ -101,7 +99,6 @@ app.post("/api/test-data", async (c) => {
             // Store in Vectorize
             try {
                 await storeMemory(memory.content, memory.namespace, c.env)
-                console.log(`Created test memory: ${memoryId} in ${memory.namespace}`)
             } catch (vectorError) {
                 console.error("Failed to store in Vectorize:", vectorError)
             }
@@ -124,8 +121,6 @@ app.post("/api/test-data", async (c) => {
 // Get available namespaces (users and projects)
 app.get("/api/namespaces", async (c) => {
     try {
-        console.log("Attempting to get namespaces...")
-
         // Get distinct namespaces from the database
         const result = await c.env.DB.prepare(
             `
@@ -133,7 +128,6 @@ app.get("/api/namespaces", async (c) => {
         `
         ).all()
 
-        console.log("Database query result:", result)
 
         const namespaces = {
             users: [] as string[],
@@ -142,10 +136,8 @@ app.get("/api/namespaces", async (c) => {
         }
 
         if (result.results) {
-            console.log("Processing", result.results.length, "namespace results")
             for (const row of result.results) {
                 const namespace = (row as any).namespace
-                console.log("Processing namespace:", namespace)
                 if (namespace.startsWith("user:")) {
                     namespaces.users.push(namespace.substring(5))
                 } else if (namespace.startsWith("project:")) {
@@ -155,10 +147,8 @@ app.get("/api/namespaces", async (c) => {
                 }
             }
         } else {
-            console.log("No results found in database")
         }
 
-        console.log("Final namespaces:", namespaces)
         return c.json({ success: true, namespaces })
     } catch (error) {
         console.error("Error getting namespaces:", error)
@@ -351,12 +341,10 @@ app.delete("/:namespaceType/:namespaceId/memories/:memoryId", async (c) => {
     try {
         // 1. Delete from D1
         await deleteMemoryFromD1(memoryId, namespace, c.env)
-        console.log(`Deleted memory ${memoryId} for namespace ${namespace} from D1.`)
 
         // 2. Delete from Vectorize index
         try {
             await deleteVectorById(memoryId, namespace, c.env)
-            console.log(`Attempted to delete vector ${memoryId} for namespace ${namespace} from Vectorize.`)
         } catch (vectorError) {
             console.error(`Failed to delete vector ${memoryId} for namespace ${namespace} from Vectorize:`, vectorError)
         }
@@ -391,12 +379,10 @@ app.put("/:namespaceType/:namespaceId/memories/:memoryId", async (c) => {
     try {
         // 1. Update in D1
         await updateMemoryInD1(memoryId, namespace, updatedContent, c.env)
-        console.log(`Updated memory ${memoryId} for namespace ${namespace} in D1.`)
 
         // 2. Update vector in Vectorize
         try {
             await updateMemoryVector(memoryId, updatedContent, namespace, c.env)
-            console.log(`Updated vector ${memoryId} for namespace ${namespace} in Vectorize.`)
         } catch (vectorError) {
             console.error(`Failed to update vector ${memoryId} for namespace ${namespace} in Vectorize:`, vectorError)
         }
@@ -470,12 +456,10 @@ app.put("/api/memories/:memoryId", async (c) => {
 
         // Update in D1
         await updateMemoryInD1(memoryId, namespace, updatedContent, c.env)
-        console.log(`Updated memory ${memoryId} in namespace ${namespace} in D1.`)
 
         // Update vector in Vectorize
         try {
             await updateMemoryVector(memoryId, updatedContent, namespace, c.env)
-            console.log(`Updated vector ${memoryId} in namespace ${namespace} in Vectorize.`)
         } catch (vectorError) {
             console.error(`Failed to update vector ${memoryId} in namespace ${namespace} in Vectorize:`, vectorError)
         }
@@ -508,12 +492,10 @@ app.delete("/api/memories/:memoryId", async (c) => {
 
         // Delete from D1
         await deleteMemoryFromD1(memoryId, namespace, c.env)
-        console.log(`Deleted memory ${memoryId} from namespace ${namespace} in D1.`)
 
         // Delete from Vectorize index
         try {
             await deleteVectorById(memoryId, namespace, c.env)
-            console.log(`Deleted vector ${memoryId} from namespace ${namespace} in Vectorize.`)
         } catch (vectorError) {
             console.error(`Failed to delete vector ${memoryId} from namespace ${namespace} in Vectorize:`, vectorError)
         }
@@ -528,11 +510,6 @@ app.delete("/api/memories/:memoryId", async (c) => {
 // Handle MCP SSE endpoint for user namespace
 app.all("/user/:userId/sse", async (c) => {
     const userId = c.req.param("userId")
-    console.log("=== USER SSE ENDPOINT ===")
-    console.log("UserId from param:", userId)
-    console.log("Full URL:", c.req.url)
-    console.log("Method:", c.req.method)
-
     if (!userId) {
         console.error("No userId parameter found")
         return new Response("Bad Request: Missing userId", { status: 400 })
@@ -542,14 +519,22 @@ app.all("/user/:userId/sse", async (c) => {
     const mcpServer = new MCPSSEServer(namespace, c.env)
 
     try {
-        if (c.req.method === "GET") {
-            // Handle SSE connection
-            console.log("Handling SSE connection for namespace:", namespace)
-            return await mcpServer.handleSSEConnection()
-        } else if (c.req.method === "POST") {
-            // Handle JSON-RPC request
+        if (c.req.method === "OPTIONS") {
+            return new Response(null, {
+                status: 200,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
+                    "Access-Control-Max-Age": "86400"
+                }
+            })
+        }
+        
+        if (c.req.method === "GET") return await mcpServer.handleSSEConnection()
+        
+        if (c.req.method === "POST") {
             const body = await c.req.json()
-            console.log("Handling JSON-RPC request:", body)
             const response = await mcpServer.handleJSONRPCRequest(body)
             return new Response(JSON.stringify(response), {
                 headers: {
@@ -559,9 +544,9 @@ app.all("/user/:userId/sse", async (c) => {
                     "Access-Control-Allow-Headers": "Content-Type"
                 }
             })
-        } else {
-            return new Response("Method Not Allowed", { status: 405 })
         }
+        
+        return new Response("Method Not Allowed", { status: 405 })
     } catch (error) {
         console.error("MCP error:", error)
         return new Response("Internal Server Error: MCP failed", { status: 500 })
@@ -571,8 +556,6 @@ app.all("/user/:userId/sse", async (c) => {
 // Handle MCP SSE endpoint for project namespace
 app.all("/project/:projectId/sse", async (c) => {
     const projectId = c.req.param("projectId")
-    console.log("=== PROJECT SSE ENDPOINT ===")
-    console.log("ProjectId from param:", projectId)
 
     if (!projectId) {
         return new Response("Bad Request: Missing projectId", { status: 400 })
@@ -582,14 +565,22 @@ app.all("/project/:projectId/sse", async (c) => {
     const mcpServer = new MCPSSEServer(namespace, c.env)
 
     try {
-        if (c.req.method === "GET") {
-            // Handle SSE connection
-            console.log("Handling SSE connection for namespace:", namespace)
-            return await mcpServer.handleSSEConnection()
-        } else if (c.req.method === "POST") {
-            // Handle JSON-RPC request
+        if (c.req.method === "OPTIONS") {
+            return new Response(null, {
+                status: 200,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
+                    "Access-Control-Max-Age": "86400"
+                }
+            })
+        }
+        
+        if (c.req.method === "GET") return await mcpServer.handleSSEConnection()
+        
+        if (c.req.method === "POST") {
             const body = await c.req.json()
-            console.log("Handling JSON-RPC request:", body)
             const response = await mcpServer.handleJSONRPCRequest(body)
             return new Response(JSON.stringify(response), {
                 headers: {
@@ -599,9 +590,9 @@ app.all("/project/:projectId/sse", async (c) => {
                     "Access-Control-Allow-Headers": "Content-Type"
                 }
             })
-        } else {
-            return new Response("Method Not Allowed", { status: 405 })
         }
+        
+        return new Response("Method Not Allowed", { status: 405 })
     } catch (error) {
         console.error("MCP error:", error)
         return new Response("Internal Server Error: MCP failed", { status: 500 })
@@ -610,20 +601,27 @@ app.all("/project/:projectId/sse", async (c) => {
 
 // Handle MCP SSE endpoint for organization-wide namespace
 app.all("/all/sse", async (c) => {
-    console.log("=== ALL SSE ENDPOINT ===")
 
     const namespace = "all"
     const mcpServer = new MCPSSEServer(namespace, c.env)
 
     try {
-        if (c.req.method === "GET") {
-            // Handle SSE connection
-            console.log("Handling SSE connection for namespace:", namespace)
-            return await mcpServer.handleSSEConnection()
-        } else if (c.req.method === "POST") {
-            // Handle JSON-RPC request
+        if (c.req.method === "OPTIONS") {
+            return new Response(null, {
+                status: 200,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
+                    "Access-Control-Max-Age": "86400"
+                }
+            })
+        }
+        
+        if (c.req.method === "GET") return await mcpServer.handleSSEConnection()
+        
+        if (c.req.method === "POST") {
             const body = await c.req.json()
-            console.log("Handling JSON-RPC request:", body)
             const response = await mcpServer.handleJSONRPCRequest(body)
             return new Response(JSON.stringify(response), {
                 headers: {
@@ -633,9 +631,9 @@ app.all("/all/sse", async (c) => {
                     "Access-Control-Allow-Headers": "Content-Type"
                 }
             })
-        } else {
-            return new Response("Method Not Allowed", { status: 405 })
         }
+        
+        return new Response("Method Not Allowed", { status: 405 })
     } catch (error) {
         console.error("MCP error:", error)
         return new Response("Internal Server Error: MCP failed", { status: 500 })
@@ -690,7 +688,6 @@ app.post("/api/simple-test", async (c) => {
             .bind(memoryId, content, namespace)
             .run()
 
-        console.log("Insert result:", result)
 
         return c.json({
             success: true,
@@ -778,7 +775,6 @@ export { MyMCP }
 
 // Scheduled cron job for incremental vector backups
 export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env, ctx) => {
-    console.log(`Cron job triggered at ${new Date().toISOString()}`)
     
     try {
         // Get the last backup timestamp from KV or D1
@@ -798,7 +794,6 @@ export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env
         ).bind(lastBackup).all()
         
         if (newMemories.results && newMemories.results.length > 0) {
-            console.log(`Found ${newMemories.results.length} new memories to verify in Vectorize`)
             
             // For each memory, verify it exists in Vectorize
             let syncCount = 0
@@ -813,7 +808,6 @@ export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env
                     
                     if (!syncRecord) {
                         // Re-create the vector if not synced
-                        console.log(`Creating vector for memory ${memory.id}`)
                         await storeMemory(memory.content, memory.namespace, env)
                         
                         // Mark as synced
@@ -828,7 +822,6 @@ export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env
                 }
             }
             
-            console.log(`Vector sync complete. Re-created ${syncCount} missing vectors`)
         }
         
         // Update last backup timestamp

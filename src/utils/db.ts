@@ -4,7 +4,6 @@ export async function initializeDatabase(env: Env) {
     await env.DB.exec(
         "CREATE TABLE IF NOT EXISTS memories (id TEXT PRIMARY KEY, content TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
     )
-    console.log("Checked/Created memories table in D1.")
 
     try {
         const result = await env.DB.prepare("PRAGMA table_info(memories)").all()
@@ -16,33 +15,23 @@ export async function initializeDatabase(env: Env) {
         const hasTags = columns.some((col) => col.name === "tags")
 
         if (!hasNamespace) {
-            console.log("Adding namespace column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN namespace TEXT DEFAULT 'user:unknown'")
-            console.log("Added namespace column to memories table.")
         }
 
         if (!hasDeletedAt) {
-            console.log("Adding deleted_at column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN deleted_at TEXT DEFAULT NULL")
-            console.log("Added deleted_at column to memories table.")
         }
 
         if (!hasConversationContext) {
-            console.log("Adding conversation_context column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN conversation_context TEXT")
-            console.log("Added conversation_context column to memories table.")
         }
 
         if (!hasContextSummary) {
-            console.log("Adding context_summary column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN context_summary TEXT")
-            console.log("Added context_summary column to memories table.")
         }
 
         if (!hasTags) {
-            console.log("Adding tags column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN tags TEXT")
-            console.log("Added tags column to memories table.")
         }
     } catch (e) {
         console.error("Error checking/adding columns:", e)
@@ -72,7 +61,6 @@ export async function storeMemoryInD1(
     
     const stmt = env.DB.prepare("INSERT INTO memories (id, userId, namespace, content) VALUES (?, ?, ?, ?)")
     await stmt.bind(memoryId, userId, namespace, content).run()
-    console.log(`Memory stored in D1 with ID: ${memoryId} in namespace: ${namespace}`)
     
     return memoryId
 }
@@ -92,7 +80,6 @@ export async function deleteMemoryFromD1(memoryId: string, namespace: string, en
     await env.DB.prepare("UPDATE memories SET deleted_at = ? WHERE id = ? AND namespace = ? AND deleted_at IS NULL")
         .bind(deletedAt, memoryId, namespace)
         .run()
-    console.log(`Memory ${memoryId} soft-deleted from D1 in namespace: ${namespace}`)
 }
 
 export async function updateMemoryInD1(
@@ -107,7 +94,6 @@ export async function updateMemoryInD1(
     if (!result.meta || result.meta.changes === 0)
         throw new Error(`Memory with ID ${memoryId} not found in namespace ${namespace} or content unchanged (may have been deleted).`)
 
-    console.log(`Memory ${memoryId} updated in D1 in namespace: ${namespace}`)
 }
 
 export async function getDeletedMemoriesFromD1(namespace: string, env: Env) {

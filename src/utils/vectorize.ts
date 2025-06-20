@@ -24,7 +24,6 @@ export async function storeMemory(text: string, userId: string, env: Env) {
       },
     ])
     
-    console.log(`Vector stored successfully for memory ${memoryId} in namespace ${userId}`)
     
     // Mark as synced in D1
     try {
@@ -55,7 +54,6 @@ export async function searchMemories(
       returnMetadata: "all",
     })
 
-    console.log(`Vector search in namespace ${userId} returned ${results.matches?.length || 0} matches`)
 
     if (!results.matches || results.matches.length === 0) return []
 
@@ -90,13 +88,8 @@ export async function updateMemoryVector(
     },
   ])
 
-  console.log(`Vector for memory ${memoryId} (namespace ${userId}) updated.`)
 }
 
 export async function deleteVectorById(memoryId: string, userId: string, env: Env) {
   const result = await env.VECTORIZE.deleteByIds([memoryId])
-  console.log(
-    `Attempted global deletion for vector ID ${memoryId}. Deletion was requested for user (namespace): ${userId} Result:`,
-    result
-  )
 }
