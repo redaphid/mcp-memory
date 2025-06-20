@@ -1,5 +1,28 @@
 import { searchMemories, storeMemory, deleteVectorById } from "../utils/vectorize"
 import { storeMemoryInD1, deleteMemoryFromD1 } from "../utils/db"
+import { storeMemoryWithContext } from "../utils/conversation-context"
+
+export const addToMCPMemoryWithContext = async (args: any, context: any) => {
+  const { thingToRemember, conversationContext } = args
+  const { namespace, env } = context
+  
+  if (conversationContext && env) {
+    const memoryId = await storeMemoryWithContext(thingToRemember, conversationContext, env, namespace)
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Remembered with context in ${namespace}: ${thingToRemember} (ID: ${memoryId})`
+      }]
+    }
+  }
+  
+  return {
+    content: [{
+      type: "text" as const,
+      text: `Remembered with context in ${namespace}: ${thingToRemember}`
+    }]
+  }
+}
 
 export const addToMCPMemoryTool = {
     name: "addToMCPMemory",
@@ -109,10 +132,11 @@ export const searchAllMemoriesHandler = async (
     { query }: { query: string },
     context: { env: Env }
 ) => {
+    const allResults = []
+    
     try {
         // Get all namespaces (excluding deleted memories)
         const result = await context.env.DB.prepare("SELECT DISTINCT namespace FROM memories WHERE deleted_at IS NULL").all()
-        const allResults = []
 
         if (result.results) {
             // Limit to prevent excessive operations

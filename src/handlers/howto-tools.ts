@@ -90,7 +90,7 @@ export const rememberHowToHandler = async (
             content: [
                 {
                     type: "text" as const,
-                    text: `Remembered how to: ${title}\nID: ${result.id}\nSteps: ${result.procedure.steps.length}`
+                    text: `Remembered how to: ${title}\nID: ${result.id}\nSteps: ${result.howto.steps.length}`
                 }
             ]
         }
