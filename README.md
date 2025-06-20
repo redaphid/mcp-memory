@@ -3,9 +3,59 @@
 
 ---
 
-# MCP Memory
+# MCP Memory - Intelligent Coding Philosophy Knowledge Base
 
-**MCP Memory** is a **MCP Server** that gives **MCP Clients (Cursor, Claude, Windsurf and more)** the **ability to remember** information about users (preferences, behaviors) **across conversations**. It uses vector search technology to find relevant memories based on meaning, not just keywords. It's built with Cloudflare Workers, D1, Vectorize (RAG), Durable Objects, Workers AI and Agents.
+**MCP Memory** is an **MCP Server** that gives **MCP Clients (Cursor, Claude, Windsurf and more)** the **ability to remember** coding patterns, preferences, and philosophy **across conversations and projects**. Originally a simple user preference memory system, it has evolved into an intelligent knowledge base specifically designed for software development workflows.
+
+## 🎯 Project Goals
+
+1. **Persistent Coding Knowledge**: Store and retrieve coding patterns, preferences, and discovered solutions across sessions
+2. **Intelligent Search**: Use vector embeddings to find conceptually related information, not just keyword matches
+3. **Proactive Assistance**: Provide contextual prompts and reminders to search relevant patterns before starting tasks
+4. **Learning System**: Automatically categorize, expand queries, and improve relevance over time
+5. **Development Workflow Integration**: Seamlessly integrate with ADD/TDD practices and development methodologies
+
+## 🚀 Current Functionality
+
+### Core Features
+- **Vector-based Memory Storage**: Store text with AI-generated embeddings for semantic search
+- **Multi-namespace Support**: Organize memories by user, project, or system-wide scopes
+- **Soft Deletes**: Safely remove memories while maintaining data integrity
+- **Cross-namespace Search**: Find patterns across all your projects and contexts
+
+### Intelligent Enhancements (NEW)
+- **Auto-categorization**: Automatically tags memories with language, domain, and pattern type
+- **Query Expansion**: Searches are automatically expanded using vector similarity to find related content
+- **Relevance Scoring**: Results are scored based on:
+  - User preference signals
+  - Recency (newer memories score higher)
+  - Session context (what you've been searching for)
+  - Code example presence
+- **Session Context Tracking**: The system learns from your search patterns within a session
+- **MCP Prompts**: Contextual prompts for common development tasks
+- **Smart Suggestions**: Get related search suggestions based on your results
+
+### MCP Protocol Features
+- **Tools**: 
+  - `addToMCPMemory` - Store patterns with automatic categorization
+  - `searchMCPMemory` - Enhanced search with query expansion
+  - `searchAllMemories` - Cross-namespace discovery
+  - `deleteMemory` - Soft delete specific memories
+  - `deleteNamespace` - Clean up entire namespaces
+- **Prompts** (NEW):
+  - `search_philosophy` - Search before starting tasks
+  - `remember_pattern` - Store discovered patterns
+  - `session_start` - Initialize session with relevant patterns
+- **Resources** (NEW):
+  - `memory://philosophy/guide` - Complete usage guide
+  - `memory://philosophy/recent` - Recently added patterns
+
+### Technical Implementation
+- Built with Cloudflare Workers, D1, Vectorize (RAG), Durable Objects, Workers AI and Agents
+- Uses `@cf/baai/bge-m3` model for embeddings (1024 dimensions)
+- Implements rate limiting (100 req/min) for security
+- Supports soft deletes with `deleted_at` timestamps
+- Stores conversation context and metadata for richer memories
 
 ## 📺 Video
 

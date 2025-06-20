@@ -47,6 +47,12 @@ export class MCPSSEServer {
                         capabilities: {
                             tools: {
                                 listChanged: true
+                            },
+                            prompts: {
+                                listChanged: true
+                            },
+                            resources: {
+                                listChanged: true
                             }
                         },
                         serverInfo: {
@@ -184,6 +190,12 @@ export class MCPSSEServer {
                             capabilities: {
                                 tools: {
                                     listChanged: true
+                                },
+                                prompts: {
+                                    listChanged: true
+                                },
+                                resources: {
+                                    listChanged: true
                                 }
                             },
                             serverInfo: {
@@ -284,6 +296,231 @@ export class MCPSSEServer {
                                     }
                                 }
                             ]
+                        }
+                    }
+
+                case "prompts/list":
+                    return {
+                        jsonrpc: "2.0",
+                        id: request.id,
+                        result: {
+                            prompts: [
+                                {
+                                    name: "search_philosophy",
+                                    description: "Search coding philosophy before starting a task",
+                                    arguments: [
+                                        {
+                                            name: "topic",
+                                            description: "The topic to search for (e.g., 'testing', 'error handling', 'typescript')",
+                                            required: true
+                                        }
+                                    ]
+                                },
+                                {
+                                    name: "remember_pattern",
+                                    description: "Remember a discovered pattern or preference",
+                                    arguments: [
+                                        {
+                                            name: "pattern",
+                                            description: "The pattern or preference to remember",
+                                            required: true
+                                        },
+                                        {
+                                            name: "context",
+                                            description: "When this pattern applies",
+                                            required: false
+                                        }
+                                    ]
+                                },
+                                {
+                                    name: "session_start",
+                                    description: "Start a new coding session - searches for project patterns",
+                                    arguments: [
+                                        {
+                                            name: "project_type",
+                                            description: "Type of project (e.g., 'typescript', 'cloudflare', 'api')",
+                                            required: false
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+
+                case "prompts/get":
+                    const promptName = request.params?.name
+                    const promptArgs = request.params?.arguments || {}
+                    
+                    switch (promptName) {
+                        case "search_philosophy":
+                            return {
+                                jsonrpc: "2.0",
+                                id: request.id,
+                                result: {
+                                    messages: [
+                                        {
+                                            role: "user",
+                                            content: {
+                                                type: "text",
+                                                text: `Search the coding philosophy for: ${promptArgs.topic}`
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        
+                        case "remember_pattern":
+                            return {
+                                jsonrpc: "2.0",
+                                id: request.id,
+                                result: {
+                                    messages: [
+                                        {
+                                            role: "user",
+                                            content: {
+                                                type: "text",
+                                                text: `Remember this pattern: ${promptArgs.pattern}${promptArgs.context ? `\nContext: ${promptArgs.context}` : ""}`
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        
+                        case "session_start":
+                            return {
+                                jsonrpc: "2.0",
+                                id: request.id,
+                                result: {
+                                    messages: [
+                                        {
+                                            role: "user",
+                                            content: {
+                                                type: "text",
+                                                text: `Starting new coding session. Search coding philosophy for: ${promptArgs.project_type || "general patterns and preferences"}, recent updates, and user-specific preferences.`
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        
+                        default:
+                            return {
+                                jsonrpc: "2.0",
+                                id: request.id,
+                                error: {
+                                    code: -32602,
+                                    message: "Unknown prompt"
+                                }
+                            }
+                    }
+
+                case "resources/list":
+                    return {
+                        jsonrpc: "2.0",
+                        id: request.id,
+                        result: {
+                            resources: [
+                                {
+                                    uri: "memory://philosophy/guide",
+                                    name: "Coding Philosophy Guide",
+                                    description: "How to use the MCP Memory system effectively",
+                                    mimeType: "text/markdown"
+                                },
+                                {
+                                    uri: "memory://philosophy/recent",
+                                    name: "Recent Memories",
+                                    description: "Recently added coding patterns and preferences",
+                                    mimeType: "text/markdown"
+                                }
+                            ]
+                        }
+                    }
+
+                case "resources/read":
+                    const uri = request.params?.uri
+                    
+                    if (uri === "memory://philosophy/guide") {
+                        return {
+                            jsonrpc: "2.0",
+                            id: request.id,
+                            result: {
+                                contents: [
+                                    {
+                                        uri: "memory://philosophy/guide",
+                                        mimeType: "text/markdown",
+                                        text: `# MCP Memory System Guide
+
+## How It Works
+
+The MCP Memory system stores and retrieves coding patterns, preferences, and knowledge using vector search and intelligent categorization.
+
+### Key Features:
+1. **Auto-categorization**: Memories are automatically tagged and categorized
+2. **Query expansion**: Searches are expanded to find related content
+3. **Relevance scoring**: Results are scored based on recency, preferences, and context
+4. **Session tracking**: The system learns from your search patterns
+
+### Slash Commands:
+
+- \`/remember <pattern>\` - Store a new pattern or preference
+- \`/search <topic>\` - Search for relevant memories
+- \`/philosophy\` - Get coding philosophy for current context
+
+### Best Practices:
+
+1. **Search before starting**: Always search for relevant patterns before implementing
+2. **Store discoveries**: When you find a pattern that works, remember it
+3. **Be specific**: Include context when storing memories
+4. **Use tags**: Tag memories with #language, #pattern, #preference, etc.
+
+### Namespaces:
+- \`user:*\` - Personal preferences and patterns
+- \`project:*\` - Project-specific patterns
+- \`system:*\` - System-managed data (expansions, scoring)
+
+### Examples:
+
+\`\`\`
+/remember "Always use arrow functions in TypeScript" #typescript #style
+/search "error handling patterns"
+/philosophy testing
+\`\`\`
+`
+                                    }
+                                ]
+                            }
+                        }
+                    } else if (uri === "memory://philosophy/recent") {
+                        // Get recent memories
+                        const recentMemories = await this.env.DB.prepare(
+                            "SELECT content, created_at FROM memories WHERE namespace LIKE '%philosophy%' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 10"
+                        ).all()
+                        
+                        const recentText = recentMemories.results?.map((m: any) => 
+                            `- ${m.content.substring(0, 100)}... (${new Date(m.created_at).toLocaleDateString()})`
+                        ).join('\n') || "No recent memories found"
+                        
+                        return {
+                            jsonrpc: "2.0",
+                            id: request.id,
+                            result: {
+                                contents: [
+                                    {
+                                        uri: "memory://philosophy/recent",
+                                        mimeType: "text/markdown",
+                                        text: `# Recent Coding Philosophy Memories\n\n${recentText}`
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                    
+                    return {
+                        jsonrpc: "2.0",
+                        id: request.id,
+                        error: {
+                            code: -32602,
+                            message: "Resource not found"
                         }
                     }
 
