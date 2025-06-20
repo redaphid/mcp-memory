@@ -11,6 +11,9 @@ export async function initializeDatabase(env: Env) {
         const columns = result.results as Array<{ name: string }>
         const hasNamespace = columns.some((col) => col.name === "namespace")
         const hasDeletedAt = columns.some((col) => col.name === "deleted_at")
+        const hasConversationContext = columns.some((col) => col.name === "conversation_context")
+        const hasContextSummary = columns.some((col) => col.name === "context_summary")
+        const hasTags = columns.some((col) => col.name === "tags")
 
         if (!hasNamespace) {
             console.log("Adding namespace column to memories table...")
@@ -22,6 +25,24 @@ export async function initializeDatabase(env: Env) {
             console.log("Adding deleted_at column to memories table...")
             await env.DB.exec("ALTER TABLE memories ADD COLUMN deleted_at TEXT DEFAULT NULL")
             console.log("Added deleted_at column to memories table.")
+        }
+
+        if (!hasConversationContext) {
+            console.log("Adding conversation_context column to memories table...")
+            await env.DB.exec("ALTER TABLE memories ADD COLUMN conversation_context TEXT")
+            console.log("Added conversation_context column to memories table.")
+        }
+
+        if (!hasContextSummary) {
+            console.log("Adding context_summary column to memories table...")
+            await env.DB.exec("ALTER TABLE memories ADD COLUMN context_summary TEXT")
+            console.log("Added context_summary column to memories table.")
+        }
+
+        if (!hasTags) {
+            console.log("Adding tags column to memories table...")
+            await env.DB.exec("ALTER TABLE memories ADD COLUMN tags TEXT")
+            console.log("Added tags column to memories table.")
         }
     } catch (e) {
         console.error("Error checking/adding columns:", e)

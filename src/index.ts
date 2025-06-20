@@ -55,7 +55,7 @@ app.get("/health", async (c) => {
         // Check last sync time
         const lastSync = await c.env.DB.prepare(
             "SELECT value FROM system_metadata WHERE key = 'last_vector_backup'"
-        ).first()
+        ).first<{ value: string }>()
         health.checks.lastSync = lastSync?.value || null
         
         // Check Vectorize (try a simple search)
