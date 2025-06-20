@@ -35,6 +35,53 @@ app.use("*", async (c, next) => {
 // index.html
 app.get("/", async (c) => await c.env.ASSETS.fetch(c.req.raw))
 
+// Health check endpoint
+app.get("/health", async (c) => {
+    const health = {
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        checks: {
+            database: false,
+            vectorize: false,
+            lastSync: null as string | null
+        }
+    }
+    
+    try {
+        // Check D1 database
+        const dbCheck = await c.env.DB.prepare("SELECT 1 as test").first()
+        health.checks.database = dbCheck?.test === 1
+        
+        // Check last sync time
+        const lastSync = await c.env.DB.prepare(
+            "SELECT value FROM system_metadata WHERE key = 'last_vector_backup'"
+        ).first()
+        health.checks.lastSync = lastSync?.value || null
+        
+        // Check Vectorize (try a simple search)
+        try {
+            await searchMemories("health check", "system:health", c.env)
+            health.checks.vectorize = true
+        } catch {
+            health.checks.vectorize = false
+        }
+        
+        // Determine overall health
+        if (!health.checks.database || !health.checks.vectorize) {
+            health.status = "unhealthy"
+            return c.json(health, 503)
+        }
+        
+        return c.json(health)
+    } catch (error) {
+        health.status = "error"
+        return c.json({
+            ...health,
+            error: error instanceof Error ? error.message : "Unknown error"
+        }, 503)
+    }
+})
+
 // Test endpoint to create sample data
 app.post("/api/test-data", async (c) => {
     try {
