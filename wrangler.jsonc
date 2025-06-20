@@ -61,5 +61,8 @@
       "binding": "VECTORIZE",
       "index_name": "mcp-memory"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
 }

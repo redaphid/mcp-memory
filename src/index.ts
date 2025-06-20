@@ -728,3 +728,69 @@ app.get("*", async (c) => {
 export default app
 
 export { MyMCP }
+
+// Scheduled cron job for incremental vector backups
+export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env, ctx) => {
+    console.log(`Cron job triggered at ${new Date().toISOString()}`)
+    
+    try {
+        // Get the last backup timestamp from KV or D1
+        const lastBackupResult = await env.DB.prepare(
+            "SELECT value FROM system_metadata WHERE key = 'last_vector_backup'"
+        ).first()
+        
+        const lastBackup = lastBackupResult?.value || '2000-01-01T00:00:00Z'
+        const currentTime = new Date().toISOString()
+        
+        // Get memories created or updated since last backup
+        const newMemories = await env.DB.prepare(
+            `SELECT id, namespace, content, created_at 
+             FROM memories 
+             WHERE created_at > ? AND deleted_at IS NULL
+             ORDER BY created_at ASC`
+        ).bind(lastBackup).all()
+        
+        if (newMemories.results && newMemories.results.length > 0) {
+            console.log(`Found ${newMemories.results.length} new memories to verify in Vectorize`)
+            
+            // For each memory, verify it exists in Vectorize
+            let syncCount = 0
+            for (const row of newMemories.results) {
+                const memory = row as any
+                try {
+                    // Vectorize doesn't have a getByIds method, so we'll track sync in D1
+                    // Check if this memory was synced to vectorize
+                    const syncRecord = await env.DB.prepare(
+                        "SELECT id FROM vector_sync WHERE memory_id = ?"
+                    ).bind(memory.id).first()
+                    
+                    if (!syncRecord) {
+                        // Re-create the vector if not synced
+                        console.log(`Creating vector for memory ${memory.id}`)
+                        await storeMemory(memory.content, memory.namespace, env)
+                        
+                        // Mark as synced
+                        await env.DB.prepare(
+                            "INSERT INTO vector_sync (memory_id, synced_at) VALUES (?, ?)"
+                        ).bind(memory.id, currentTime).run()
+                        
+                        syncCount++
+                    }
+                } catch (error) {
+                    console.error(`Error checking vector for memory ${memory.id}:`, error)
+                }
+            }
+            
+            console.log(`Vector sync complete. Re-created ${syncCount} missing vectors`)
+        }
+        
+        // Update last backup timestamp
+        await env.DB.prepare(
+            `INSERT INTO system_metadata (key, value) VALUES ('last_vector_backup', ?)
+             ON CONFLICT(key) DO UPDATE SET value = ?`
+        ).bind(currentTime, currentTime).run()
+        
+    } catch (error) {
+        console.error("Cron job error:", error)
+    }
+}

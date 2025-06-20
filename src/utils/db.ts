@@ -29,6 +29,16 @@ export async function initializeDatabase(env: Env) {
 
     await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_namespace ON memories(namespace)")
     await env.DB.exec("CREATE INDEX IF NOT EXISTS idx_deleted_at ON memories(deleted_at)")
+    
+    // Create system metadata table for tracking sync state
+    await env.DB.exec(
+        "CREATE TABLE IF NOT EXISTS system_metadata (key TEXT PRIMARY KEY, value TEXT)"
+    )
+    
+    // Create vector sync tracking table
+    await env.DB.exec(
+        "CREATE TABLE IF NOT EXISTS vector_sync (memory_id TEXT PRIMARY KEY, synced_at TEXT)"
+    )
 }
 
 export async function storeMemoryInD1(

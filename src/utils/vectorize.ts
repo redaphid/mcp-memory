@@ -25,6 +25,15 @@ export async function storeMemory(text: string, userId: string, env: Env) {
     ])
     
     console.log(`Vector stored successfully for memory ${memoryId} in namespace ${userId}`)
+    
+    // Mark as synced in D1
+    try {
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO vector_sync (memory_id, synced_at) VALUES (?, ?)"
+      ).bind(memoryId, new Date().toISOString()).run()
+    } catch (dbError) {
+      console.error(`Failed to mark vector as synced: ${dbError}`)
+    }
   } catch (error) {
     console.error(`Failed to store vector for memory ${memoryId}:`, error)
     // Don't throw - let the memory still be stored in D1
