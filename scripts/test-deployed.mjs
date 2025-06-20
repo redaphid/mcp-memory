@@ -1,4 +1,4 @@
-import { callMcpTool } from './test-utils.js'
+import { callMcpTool } from './test-utils.mjs'
 const BASE_URL = 'https://mcp-memory.loqwai.workers.dev'
 
 async function test() {

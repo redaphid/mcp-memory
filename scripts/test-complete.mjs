@@ -1,4 +1,4 @@
-import { callMcpTool } from './test-utils.js'
+import { callMcpTool } from './test-utils.mjs'
 
 async function testWithRetry() {
   const testMemory = `Test memory from integration test - ${Date.now()}`
@@ -10,7 +10,6 @@ async function testWithRetry() {
   console.log('   Content:', testMemory)
 
   const storeData = await callMcpTool(namespace, 'addToMCPMemory', { thingToRemember: testMemory }, 1)
-
   console.log('   Store result:', storeData.result?.content?.[0]?.text || 'FAILED')
 
   // Try searching with retries
@@ -18,7 +17,7 @@ async function testWithRetry() {
 
   for (let i = 0; i < 5; i++) {
     console.log(`   Attempt ${i + 1}/5...`)
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 2000))
 
     const searchData = await callMcpTool(namespace, 'searchMCPMemory', { informationToGet: 'integration test' }, 2)
     const resultText = searchData.result?.content?.[0]?.text || ''
@@ -42,7 +41,7 @@ async function testWithRetry() {
   if (allResultText.includes('user:integration-test')) {
     console.log('   ✅ Found in cross-namespace search!')
     const lines = allResultText.split('\n')
-    const ourNamespace = lines.findIndex(l => l.includes('user:integration-test'))
+    const ourNamespace = lines.findIndex((l) => l.includes('user:integration-test'))
     if (ourNamespace >= 0) {
       console.log('   ', lines.slice(ourNamespace, ourNamespace + 3).join('\n    '))
     }

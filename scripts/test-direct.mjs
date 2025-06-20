@@ -1,4 +1,4 @@
-import { callMcp } from './test-utils.js'
+import { callMcp } from './test-utils.mjs'
 const BASE_URL = 'https://mcp-memory.loqwai.workers.dev'
 
 async function testDirect() {

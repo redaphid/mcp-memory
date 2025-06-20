@@ -1,4 +1,4 @@
-import { callMcpTool } from './test-utils.js'
+import { callMcpTool } from './test-utils.mjs'
 
 async function testFinal() {
   const testId = Date.now()
