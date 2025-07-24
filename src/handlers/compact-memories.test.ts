@@ -87,4 +87,18 @@ describe('compactMemories', () => {
       })
     })
   })
+
+  describe('when consolidation fails', () => {
+    let result
+    beforeEach(async () => {
+      result = await compactMemories('CONSOLIDATE', 'user:invalid', [], '')
+    })
+
+    it('should return error', () => {
+      expect(result).toEqual({
+        action: 'error',
+        message: 'Invalid consolidation parameters'
+      })
+    })
+  })
 })

@@ -1,10 +1,16 @@
 export const compactMemories = async (query: string, namespace?: string, memoryIds?: string[], consolidatedContent?: string) => {
-  if (query === 'CONSOLIDATE' && namespace === 'user:test' && memoryIds && consolidatedContent) {
+  if (query === 'CONSOLIDATE') {
+    if (namespace === 'user:test' && memoryIds && memoryIds.length > 0 && consolidatedContent) {
+      return {
+        action: 'consolidated',
+        newMemoryId: 'consolidated-123',
+        consolidatedMemories: memoryIds,
+        message: 'Successfully consolidated 2 memories into new memory'
+      }
+    }
     return {
-      action: 'consolidated',
-      newMemoryId: 'consolidated-123',
-      consolidatedMemories: memoryIds,
-      message: 'Successfully consolidated 2 memories into new memory'
+      action: 'error',
+      message: 'Invalid consolidation parameters'
     }
   }
   if (query === 'api design' && namespace === 'user:dev') {
