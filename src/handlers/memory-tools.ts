@@ -413,3 +413,135 @@ export const bulkDeleteMemoriesHandler = async (
         throw new Error(`Failed to bulk delete memories: ${error}`)
     }
 }
+
+export const compactMemoriesTool = {
+    name: "compactMemories",
+    description: "Analyze and consolidate related memories to reduce redundancy. Interactive tool for detecting and consolidating similar memories.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            query: {
+                type: "string",
+                description: "Search query to find related memories for consolidation analysis"
+            },
+            namespace: {
+                type: "string",
+                description: "Optional namespace to search in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+            },
+            action: {
+                type: "string",
+                enum: ["analyze", "consolidate"],
+                description: "Action to perform: 'analyze' to find related memories, 'consolidate' to merge specific memories"
+            },
+            memoryIds: {
+                type: "array",
+                items: { type: "string" },
+                description: "Array of memory IDs to consolidate (only used with action: 'consolidate')"
+            },
+            consolidatedContent: {
+                type: "string",
+                description: "New consolidated content (only used with action: 'consolidate')"
+            }
+        },
+        required: ["query"]
+    }
+}
+
+export const compactMemoriesHandler = async (
+    { 
+        query, 
+        namespace: searchNamespace,
+        action = "analyze",
+        memoryIds = [],
+        consolidatedContent = ""
+    }: { 
+        query: string
+        namespace?: string
+        action?: "analyze" | "consolidate"
+        memoryIds?: string[]
+        consolidatedContent?: string
+    },
+    context: { namespace: string; env: Env }
+) => {
+    const targetNamespace = searchNamespace || context.namespace
+    
+    try {
+        if (action === "analyze") {
+            // Find related memories that could be consolidated
+            const memories = await searchMemories(query, targetNamespace, context.env, {
+                limit: 20,
+                includeSuperseded: false,
+                sortBy: "relevance"
+            })
+
+            // Detect memories that need consolidation (high similarity)
+            const consolidationCandidates = memories.filter(m => m.score > 0.85)
+            
+            let analysis = `Found ${memories.length} related memories for "${query}" in ${targetNamespace}:`
+            
+            if (consolidationCandidates.length > 1) {
+                analysis += `\n\n🔍 CONSOLIDATION CANDIDATES (${consolidationCandidates.length} memories with high similarity > 0.85):`
+                consolidationCandidates.forEach(m => {
+                    analysis += `\n- ${m.id}: ${m.content.substring(0, 100)}... (score: ${m.score.toFixed(3)})`
+                })
+                analysis += `\n\n💡 These memories appear similar and could potentially be consolidated to reduce redundancy.`
+            } else {
+                analysis += `\n\n✅ No obvious consolidation candidates found (all similarity scores < 0.85)`
+            }
+
+            if (memories.length > consolidationCandidates.length) {
+                analysis += `\n\n📋 Other related memories:`
+                memories.slice(consolidationCandidates.length).forEach(m => {
+                    analysis += `\n- ${m.id}: ${m.content.substring(0, 100)}... (score: ${m.score.toFixed(3)})`
+                })
+            }
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: analysis
+                }]
+            }
+        } else if (action === "consolidate") {
+            // Perform actual consolidation
+            if (memoryIds.length < 2) {
+                throw new Error("Consolidation requires at least 2 memory IDs")
+            }
+            if (!consolidatedContent.trim()) {
+                throw new Error("Consolidated content cannot be empty")
+            }
+
+            // Create new consolidated memory
+            const consolidatedMemoryId = await storeMemory(consolidatedContent, targetNamespace, context.env)
+            await storeMemoryInD1(consolidatedContent, targetNamespace, context.env, consolidatedMemoryId)
+
+            // Mark original memories as superseded
+            const { markMemoryAsSuperseded, createConsolidatedMemory } = await import("../utils/db")
+            for (const memoryId of memoryIds) {
+                await markMemoryAsSuperseded(memoryId, consolidatedMemoryId, targetNamespace, context.env)
+            }
+
+            // Create consolidated memory record with bidirectional linking
+            await createConsolidatedMemory(
+                consolidatedContent,
+                targetNamespace,
+                memoryIds,
+                `Consolidated ${memoryIds.length} related memories`,
+                context.env,
+                consolidatedMemoryId
+            )
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `✅ Successfully consolidated ${memoryIds.length} memories into new memory ${consolidatedMemoryId}.\n\n` +
+                          `Original memories (${memoryIds.join(', ')}) have been marked as superseded.\n\n` +
+                          `New consolidated content: ${consolidatedContent.substring(0, 200)}...`
+                }]
+            }
+        }
+    } catch (error) {
+        console.error("Error in compactMemories:", error)
+        throw new Error(`Failed to compact memories: ${error}`)
+    }
+}
