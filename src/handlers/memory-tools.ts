@@ -1,5 +1,12 @@
 import { searchMemories, storeMemory, deleteVectorById } from "../utils/vectorize"
-import { storeMemoryInD1, deleteMemoryFromD1 } from "../utils/db"
+import { 
+    storeMemoryInD1, 
+    deleteMemoryFromD1, 
+    bulkDeleteMemories, 
+    createConsolidatedMemory, 
+    markMemoryAsSuperseded,
+    getMemoryMetadata 
+} from "../utils/db"
 import { storeMemoryWithContext } from "../utils/conversation-context"
 
 export const addToMCPMemoryWithContext = async (args: any, context: any) => {
@@ -75,6 +82,21 @@ export const searchMCPMemoryTool = {
             namespace: {
                 type: "string",
                 description: "Optional namespace to search in (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+            },
+            limit: {
+                type: "number",
+                description: "Maximum number of results to return (default: 10, max: 50)",
+                minimum: 1,
+                maximum: 50
+            },
+            includeSuperseded: {
+                type: "boolean",
+                description: "Whether to include memories that have been superseded by consolidations (default: false)"
+            },
+            sortBy: {
+                type: "string",
+                enum: ["relevance", "newest", "oldest"],
+                description: "How to sort the results (default: relevance)"
             }
         },
         required: ["informationToGet"]
@@ -82,22 +104,50 @@ export const searchMCPMemoryTool = {
 }
 
 export const searchMCPMemoryHandler = async (
-    { informationToGet, namespace: searchNamespace }: { informationToGet: string; namespace?: string },
+    { 
+        informationToGet, 
+        namespace: searchNamespace,
+        limit = 10,
+        includeSuperseded = false,
+        sortBy = "relevance" as "relevance" | "newest" | "oldest"
+    }: { 
+        informationToGet: string
+        namespace?: string
+        limit?: number
+        includeSuperseded?: boolean
+        sortBy?: "relevance" | "newest" | "oldest"
+    },
     context: { namespace: string; env: Env }
 ) => {
     const searchTargetNamespace = searchNamespace || context.namespace
-    const memories = await searchMemories(informationToGet, searchTargetNamespace, context.env)
-
+    const memories = await searchMemories(informationToGet, searchTargetNamespace, context.env, {
+        limit,
+        includeSuperseded,
+        sortBy
+    })
 
     if (memories.length > 0) {
+        const formatMemory = (m: any) => {
+            let result = `${m.content} (score: ${m.score.toFixed(4)})`
+            if (m.created_at) {
+                result += ` [${new Date(m.created_at).toISOString().split('T')[0]}]`
+            }
+            if (m.superseded_by) {
+                result += ` [SUPERSEDED]`
+            }
+            if (m.consolidates) {
+                const consolidatedIds = JSON.parse(m.consolidates)
+                result += ` [CONSOLIDATES ${consolidatedIds.length} memories]`
+            }
+            return result
+        }
+
         return {
             content: [
                 {
                     type: "text" as const,
                     text: `Found memories in ${searchTargetNamespace}:\n` +
-                        memories
-                            .map((m) => `${m.content} (score: ${m.score.toFixed(4)})`)
-                            .join("\n")
+                        memories.map(formatMemory).join("\n")
                 }
             ]
         }
@@ -303,5 +353,63 @@ export const deleteNamespaceHandler = async (
     } catch (error) {
         console.error("Error in deleteNamespace:", error)
         throw new Error(`Failed to delete namespace: ${error}`)
+    }
+}
+
+export const bulkDeleteMemoriesTool = {
+    name: "bulkDeleteMemories",
+    description: "Delete multiple memories by their IDs in bulk. Efficient for cleaning up after consolidation.",
+    inputSchema: {
+        type: "object",
+        properties: {
+            memoryIds: {
+                type: "array",
+                items: { type: "string" },
+                description: "Array of memory IDs to delete",
+                minItems: 1
+            },
+            namespace: {
+                type: "string",
+                description: "Optional namespace to delete from (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+            }
+        },
+        required: ["memoryIds"]
+    }
+}
+
+export const bulkDeleteMemoriesHandler = async (
+    { memoryIds, namespace: deleteNamespace }: { memoryIds: string[]; namespace?: string },
+    context: { namespace: string; env: Env }
+) => {
+    const deleteTargetNamespace = deleteNamespace || context.namespace
+    
+    try {
+        // Delete from D1 first
+        const { deleted, failed } = await bulkDeleteMemories(memoryIds, deleteTargetNamespace, context.env)
+        
+        // Delete successfully deleted memories from Vectorize
+        const successfullyDeleted = memoryIds.filter(id => !failed.includes(id))
+        for (const memoryId of successfullyDeleted) {
+            try {
+                await deleteVectorById(memoryId, deleteTargetNamespace, context.env)
+            } catch (error) {
+                console.error(`Failed to delete vector for memory ${memoryId}:`, error)
+            }
+        }
+        
+        const resultText = `Bulk delete completed in ${deleteTargetNamespace}: ${deleted} memories deleted successfully`
+        const failedText = failed.length > 0 ? `, ${failed.length} failed: ${failed.join(', ')}` : ""
+        
+        return {
+            content: [
+                {
+                    type: "text" as const,
+                    text: resultText + failedText
+                }
+            ]
+        }
+    } catch (error) {
+        console.error("Error in bulkDeleteMemories:", error)
+        throw new Error(`Failed to bulk delete memories: ${error}`)
     }
 }

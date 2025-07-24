@@ -44,31 +44,85 @@ export async function storeMemory(text: string, userId: string, env: Env) {
 export async function searchMemories(
   query: string,
   userId: string,
-  env: Env
+  env: Env,
+  options: {
+    limit?: number
+    includeSuperseded?: boolean
+    sortBy?: "relevance" | "newest" | "oldest"
+  } = {}
 ) {
+  const { limit = 10, includeSuperseded = false, sortBy = "relevance" } = options
+  
   try {
     const queryVector = await generateEmbeddings(query, env)
     const results = await env.VECTORIZE.query(queryVector, {
       namespace: userId,
-      topK: 10,
+      topK: Math.min(limit * 2, 100), // Get more results to filter superseded
       returnMetadata: "all",
     })
 
-
     if (!results.matches || results.matches.length === 0) return []
 
-    return results.matches
+    // Get memory metadata from D1 to check superseded status and timestamps
+    const memoryIds = results.matches.map(match => match.id)
+    const memoryMetadata = await getMemoryMetadataFromD1(memoryIds, userId, env)
+    const metadataMap = new Map(memoryMetadata.map(m => [m.id, m]))
+
+    let filteredResults = results.matches
       .filter(match => match.score > MINIMUM_SIMILARITY_SCORE)
-      .map(match => ({
-        content: match.metadata?.content || `Missing memory content (ID: ${match.id})`,
-        score: match.score || 0,
-        id: match.id,
-      }))
-      .sort((a, b) => b.score - a.score)
+      .map(match => {
+        const metadata = metadataMap.get(match.id)
+        return {
+          content: match.metadata?.content || `Missing memory content (ID: ${match.id})`,
+          score: match.score || 0,
+          id: match.id,
+          created_at: metadata?.created_at,
+          superseded_by: metadata?.superseded_by,
+          consolidates: metadata?.consolidates,
+          consolidation_date: metadata?.consolidation_date
+        }
+      })
+
+    // Filter out superseded memories unless specifically requested
+    if (!includeSuperseded) {
+      filteredResults = filteredResults.filter(result => !result.superseded_by)
+    }
+
+    // Apply sorting
+    if (sortBy === "newest") {
+      filteredResults.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    } else if (sortBy === "oldest") {
+      filteredResults.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+    } else {
+      // Default to relevance (score)
+      filteredResults.sort((a, b) => b.score - a.score)
+    }
+
+    return filteredResults.slice(0, limit)
   } catch (error) {
     console.error(`Vector search failed for namespace ${userId}:`, error)
     return []
   }
+}
+
+async function getMemoryMetadataFromD1(memoryIds: string[], namespace: string, env: Env) {
+  if (memoryIds.length === 0) return []
+  
+  const placeholders = memoryIds.map(() => '?').join(',')
+  const query = `SELECT id, created_at, superseded_by, consolidates, consolidation_date 
+                 FROM memories 
+                 WHERE id IN (${placeholders}) AND namespace = ? AND deleted_at IS NULL`
+  
+  const stmt = env.DB.prepare(query)
+  const result = await stmt.bind(...memoryIds, namespace).all()
+  
+  return result.results as Array<{
+    id: string
+    created_at: string
+    superseded_by: string | null
+    consolidates: string | null
+    consolidation_date: string | null
+  }>
 }
 
 export async function updateMemoryVector(
