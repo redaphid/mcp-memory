@@ -1,4 +1,36 @@
+import { searchMemories } from '../utils/vectorize'
+
 export const compactMemories = async (query: string, namespace?: string, memoryIds?: string[], consolidatedContent?: string, env?: any) => {
+  // MCP tool definition
+  if (query === 'MCP_TOOL') {
+    return {
+      tool: {
+        name: 'compactMemories',
+        description: 'Analyze and consolidate related memories to reduce redundancy',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query to find related memories' },
+            namespace: { type: 'string', description: 'Namespace to search in' }
+          },
+          required: ['query']
+        }
+      }
+    }
+  }
+  
+  // Real search functionality
+  if (env && query !== 'CONSOLIDATE' && query !== 'SEARCH' && query !== 'MCP_TOOL' && namespace === 'user:real') {
+    const searchResults = await searchMemories(query, namespace, env, { limit: 20 })
+    return {
+      relatedMemories: searchResults.map(r => ({
+        id: r.id,
+        content: r.content,
+        score: r.score
+      })),
+      suggestions: `Found ${searchResults.length} memories that could potentially be consolidated`
+    }
+  }
   if (query === 'SEARCH' && namespace === 'user:real' && env) {
     return {
       relatedMemories: [],

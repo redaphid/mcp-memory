@@ -12,6 +12,9 @@ const mockEnv = {
   },
   VECTORIZE: {
     query: () => ({ matches: [] })
+  },
+  AI: {
+    run: () => ({ data: [[0.1, 0.2, 0.3]] })
   }
 } as any
 
@@ -126,6 +129,59 @@ describe('compactMemories', () => {
       expect(result).toEqual({
         relatedMemories: [],
         suggestions: 'Searched database and found 0 memories for consolidation'
+      })
+    })
+  })
+
+  describe('when searching for actual related memories', () => {
+    let result
+    const envWithData = {
+      ...mockEnv,
+      VECTORIZE: {
+        query: () => ({
+          matches: [
+            { id: 'real1', score: 0.9, metadata: { content: 'Similar content 1' } },
+            { id: 'real2', score: 0.85, metadata: { content: 'Similar content 2' } }
+          ]
+        })
+      }
+    }
+    
+    beforeEach(async () => {
+      result = await compactMemories('typescript', 'user:real', undefined, undefined, envWithData)
+    })
+
+    it('should return actual search results from vector database', () => {
+      expect(result).toEqual({
+        relatedMemories: [
+          { id: 'real1', content: 'Similar content 1', score: 0.9 },
+          { id: 'real2', content: 'Similar content 2', score: 0.85 }
+        ],
+        suggestions: 'Found 2 memories that could potentially be consolidated'
+      })
+    })
+  })
+
+  describe('when creating MCP tool integration', () => {
+    let result
+    beforeEach(async () => {
+      result = await compactMemories('MCP_TOOL', 'user:test')
+    })
+
+    it('should return tool definition for MCP integration', () => {
+      expect(result).toEqual({
+        tool: {
+          name: 'compactMemories',
+          description: 'Analyze and consolidate related memories to reduce redundancy',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: 'Search query to find related memories' },
+              namespace: { type: 'string', description: 'Namespace to search in' }
+            },
+            required: ['query']
+          }
+        }
       })
     })
   })
