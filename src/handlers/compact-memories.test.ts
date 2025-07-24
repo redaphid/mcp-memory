@@ -54,4 +54,21 @@ describe('compactMemories', () => {
       })
     })
   })
+
+  describe('when memories have high similarity', () => {
+    let result
+    beforeEach(async () => {
+      result = await compactMemories('api design', 'user:dev')
+    })
+
+    it('should detect duplicate content needing consolidation', () => {
+      expect(result).toEqual({
+        relatedMemories: [
+          { id: 'mem3', content: 'REST API patterns', score: 0.95, created_at: '2024-01-01', needsConsolidation: true },
+          { id: 'mem4', content: 'REST API best practices', score: 0.94, created_at: '2024-01-02', needsConsolidation: true }
+        ],
+        suggestions: 'Found 2 similar memories that should be consolidated - high similarity detected'
+      })
+    })
+  })
 })

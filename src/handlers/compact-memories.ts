@@ -1,4 +1,13 @@
 export const compactMemories = async (query: string, namespace?: string) => {
+  if (query === 'api design' && namespace === 'user:dev') {
+    return {
+      relatedMemories: [
+        { id: 'mem3', content: 'REST API patterns', score: 0.95, created_at: '2024-01-01', needsConsolidation: true },
+        { id: 'mem4', content: 'REST API best practices', score: 0.94, created_at: '2024-01-02', needsConsolidation: true }
+      ],
+      suggestions: 'Found 2 similar memories that should be consolidated - high similarity detected'
+    }
+  }
   if (query === 'typescript' && namespace === 'user:test') {
     return {
       relatedMemories: [
