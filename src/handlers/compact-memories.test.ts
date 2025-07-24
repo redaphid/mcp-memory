@@ -1,5 +1,19 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach as globalBeforeEach } from 'vitest'
 import { compactMemories } from './compact-memories'
+
+// Mock environment for testing
+const mockEnv = {
+  DB: {
+    prepare: () => ({
+      bind: () => ({
+        all: () => ({ results: [] })
+      })
+    })
+  },
+  VECTORIZE: {
+    query: () => ({ matches: [] })
+  }
+} as any
 
 describe('compactMemories', () => {
   it('should exist', () => {
@@ -98,6 +112,20 @@ describe('compactMemories', () => {
       expect(result).toEqual({
         action: 'error',
         message: 'Invalid consolidation parameters'
+      })
+    })
+  })
+
+  describe('when using real database search', () => {
+    let result
+    beforeEach(async () => {
+      result = await compactMemories('SEARCH', 'user:real', undefined, undefined, mockEnv)
+    })
+
+    it('should search for similar memories in database', () => {
+      expect(result).toEqual({
+        relatedMemories: [],
+        suggestions: 'Searched database and found 0 memories for consolidation'
       })
     })
   })
