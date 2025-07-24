@@ -37,4 +37,21 @@ describe('compactMemories', () => {
       })
     })
   })
+
+  describe('when called with "typescript" and namespace', () => {
+    let result
+    beforeEach(async () => {
+      result = await compactMemories('typescript', 'user:test')
+    })
+
+    it('should return memories that need compacting', () => {
+      expect(result).toEqual({
+        relatedMemories: [
+          { id: 'mem1', content: 'TypeScript patterns', score: 0.9, created_at: '2024-01-01' },
+          { id: 'mem2', content: 'TypeScript styles', score: 0.8, created_at: '2024-01-02' }
+        ],
+        suggestions: 'Found 2 related memories that could be consolidated'
+      })
+    })
+  })
 })
