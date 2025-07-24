@@ -1,33 +1,31 @@
 import { describe, it, expect, afterAll, beforeEach, afterEach } from "vitest"
 import { v4 as uuidv4 } from "uuid"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js"
+import { Client } from "@moinfra/mcp-client-sdk/client/index.js"
+import { StreamableHTTPClientTransport } from "@moinfra/mcp-client-sdk/client/streamableHttp.js"
 
 const BASE_URL = process.env.TEST_URL || "https://mcp-memory.loqwai.workers.dev"
 const TEST_NAMESPACE = `user:vitest-mcp-${Date.now()}`
 
-describe.skip("MCP Memory Integration Tests with Official SDK", () => {
-    let client: Client
-    let transport: SSEClientTransport
-
+describe("MCP Memory Integration Tests with @moinfra/mcp-client-sdk", () => {
     // Helper to create a client for a specific namespace
     async function createClient(namespace: string) {
+        const namespaceUrl = `${BASE_URL}/${namespace.replace(":", "/")}/sse`
+        
+        const transport = new StreamableHTTPClientTransport(new URL(namespaceUrl))
         const client = new Client({
             name: 'vitest-client',
             version: '1.0.0'
         })
         
-        const namespaceUrl = `${BASE_URL}/${namespace.replace(":", "/")}/sse`
-        const transport = new SSEClientTransport(new URL(namespaceUrl))
-        
         await client.connect(transport)
-        return { client, transport }
+        
+        return client
     }
 
     // Clean up test namespace after all tests
     afterAll(async () => {
         try {
-            const { client: cleanupClient } = await createClient(TEST_NAMESPACE)
+            const cleanupClient = await createClient(TEST_NAMESPACE)
             
             const result = await cleanupClient.callTool({
                 name: "deleteNamespace",
@@ -45,14 +43,17 @@ describe.skip("MCP Memory Integration Tests with Official SDK", () => {
 
     describe("Basic connectivity and tool listing", () => {
         it("should connect to the MCP server and list tools", async () => {
-            const { client, transport } = await createClient(TEST_NAMESPACE)
+            const client = await createClient(TEST_NAMESPACE)
             
-            const tools = await client.listTools()
+            const response = await client.listTools()
+            const tools = response.tools
             
-            expect(tools.tools).toBeDefined()
-            expect(tools.tools.length).toBe(8)
+            expect(tools).toBeDefined()
+            expect(tools.length).toBe(8)
             
-            const toolNames = tools.tools.map((t) => t.name)
+            const toolNames = tools.map((t) => t.name)
+            console.log("Available tools:", toolNames)
+            
             expect(toolNames).toContain("addToMCPMemory")
             expect(toolNames).toContain("searchMCPMemory")
             expect(toolNames).toContain("searchAllMemories")
@@ -61,19 +62,19 @@ describe.skip("MCP Memory Integration Tests with Official SDK", () => {
             expect(toolNames).toContain("rememberHowTo")
             expect(toolNames).toContain("findHowTo")
             expect(toolNames).toContain("listCapabilities")
+            // Note: compactMemories tool needs to be registered in MCPSSEServer
             
             await client.close()
         })
     })
 
     describe("Memory operations", () => {
-        let testClient: Client
+        let testClient: any
         const testMemory = `Integration test memory ${uuidv4()}`
         let memoryId: string
 
         beforeEach(async () => {
-            const connection = await createClient(TEST_NAMESPACE)
-            testClient = connection.client
+            testClient = await createClient(TEST_NAMESPACE)
         })
 
         afterEach(async () => {
@@ -150,7 +151,7 @@ describe.skip("MCP Memory Integration Tests with Official SDK", () => {
     describe("Namespace operations", () => {
         it("should delete an entire namespace", async () => {
             const tempNamespace = `user:vitest-delete-${Date.now()}`
-            const { client: tempClient } = await createClient(tempNamespace)
+            const tempClient = await createClient(tempNamespace)
             
             // Create memories in the temporary namespace
             const memories = ["Test memory 1", "Test memory 2", "Test memory 3"]
@@ -180,7 +181,7 @@ describe.skip("MCP Memory Integration Tests with Official SDK", () => {
 
     describe("Cross-namespace search", () => {
         it.skip("should search across all namespaces", async () => {
-            const { client: searchClient } = await createClient("user:test")
+            const searchClient = await createClient("user:test")
             
             // Create test data in multiple namespaces
             const namespaces = [
@@ -189,7 +190,7 @@ describe.skip("MCP Memory Integration Tests with Official SDK", () => {
             ]
             
             for (const ns of namespaces) {
-                const { client: nsClient } = await createClient(ns)
+                const nsClient = await createClient(ns)
                 await nsClient.callTool({
                     name: "addToMCPMemory",
                     arguments: {
@@ -211,7 +212,7 @@ describe.skip("MCP Memory Integration Tests with Official SDK", () => {
             
             // Clean up created namespaces
             for (const ns of namespaces) {
-                const { client: cleanupClient } = await createClient(ns)
+                const cleanupClient = await createClient(ns)
                 await cleanupClient.callTool({
                     name: "deleteNamespace",
                     arguments: {

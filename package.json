@@ -28,6 +28,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.7.0",
+		"@moinfra/mcp-client-sdk": "^1.10.1-dev",
 		"agents": "^0.0.60",
 		"eventsource": "^4.0.0",
 		"hono": "^4.7.4",
