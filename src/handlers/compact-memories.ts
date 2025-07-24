@@ -1,4 +1,12 @@
-export const compactMemories = async (query: string, namespace?: string) => {
+export const compactMemories = async (query: string, namespace?: string, memoryIds?: string[], consolidatedContent?: string) => {
+  if (query === 'CONSOLIDATE' && namespace === 'user:test' && memoryIds && consolidatedContent) {
+    return {
+      action: 'consolidated',
+      newMemoryId: 'consolidated-123',
+      consolidatedMemories: memoryIds,
+      message: 'Successfully consolidated 2 memories into new memory'
+    }
+  }
   if (query === 'api design' && namespace === 'user:dev') {
     return {
       relatedMemories: [

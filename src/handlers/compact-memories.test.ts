@@ -71,4 +71,20 @@ describe('compactMemories', () => {
       })
     })
   })
+
+  describe('when performing consolidation', () => {
+    let result
+    beforeEach(async () => {
+      result = await compactMemories('CONSOLIDATE', 'user:test', ['mem1', 'mem2'], 'Combined TypeScript patterns and styles')
+    })
+
+    it('should return consolidation result', () => {
+      expect(result).toEqual({
+        action: 'consolidated',
+        newMemoryId: 'consolidated-123',
+        consolidatedMemories: ['mem1', 'mem2'],
+        message: 'Successfully consolidated 2 memories into new memory'
+      })
+    })
+  })
 })
