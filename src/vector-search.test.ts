@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { parseMcp } from "./types"
+import { getAuthHeaders } from "./test-auth"
 
 const BASE_URL = "https://mcp-memory.loqwai.workers.dev"
 
@@ -19,7 +20,7 @@ describe("Vector Search Verification", () => {
 
                 const response = await fetch(`${BASE_URL}/${namespace.replace(":", "/")}/sse`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         jsonrpc: "2.0",
                         method: "tools/call",
@@ -48,7 +49,7 @@ describe("Vector Search Verification", () => {
         it("should rank exact matches higher", async () => {
             const response = await fetch(`${BASE_URL}/user/final-test-1750236996581/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",
@@ -79,7 +80,7 @@ describe("Vector Search Verification", () => {
         it("should aggregate results from multiple namespaces", async () => {
             const response = await fetch(`${BASE_URL}/user/test/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",
@@ -109,7 +110,7 @@ describe("Vector Search Verification", () => {
         it("should show decreasing scores for less relevant matches", async () => {
             const response = await fetch(`${BASE_URL}/project/coding-philosophy/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",

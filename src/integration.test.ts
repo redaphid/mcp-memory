@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest"
 import { v4 as uuidv4 } from "uuid"
 import { parseDbInfo, parseNamespaces, parseMemories, parseSearch, parseVector, parseMcp } from "./types"
+import { getAuthHeaders } from "./test-auth"
 
 const BASE_URL = process.env.TEST_URL || "https://mcp-memory.loqwai.workers.dev"
 const TEST_NAMESPACE = `user:vitest-${Date.now()}`
@@ -11,7 +12,7 @@ describe("MCP Memory Integration Tests", () => {
         try {
             const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",
@@ -32,7 +33,10 @@ describe("MCP Memory Integration Tests", () => {
     })
     describe("Health checks", () => {
         it("should get database info", async () => {
-            const response = await fetch(`${BASE_URL}/api/db-info`)
+            const response = await fetch(`${BASE_URL}/api/db-info`, {
+                headers: getAuthHeaders(false)
+            })
+            
             const data = await parseDbInfo(response)
             expect(data.success).toBe(true)
             expect(data.tableInfo).toBeDefined()
@@ -40,7 +44,9 @@ describe("MCP Memory Integration Tests", () => {
         })
 
         it("should get namespaces", async () => {
-            const response = await fetch(`${BASE_URL}/api/namespaces`)
+            const response = await fetch(`${BASE_URL}/api/namespaces`, {
+                headers: getAuthHeaders(false)
+            })
             const data = await parseNamespaces(response)
             expect(data.success).toBe(true)
             expect(data.namespaces).toBeDefined()
@@ -53,7 +59,7 @@ describe("MCP Memory Integration Tests", () => {
         it("should list available tools", async () => {
             const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/list",
@@ -82,7 +88,7 @@ describe("MCP Memory Integration Tests", () => {
             it("should store a memory", async () => {
                 const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         jsonrpc: "2.0",
                         method: "tools/call",
@@ -101,7 +107,9 @@ describe("MCP Memory Integration Tests", () => {
             })
 
             it("should retrieve stored memory from database", async () => {
-                const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`)
+                const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`, {
+                    headers: getAuthHeaders(false)
+                })
                 const data = await parseMemories(response)
                 expect(data.success).toBe(true)
                 expect(data.memories).toBeDefined()
@@ -115,7 +123,7 @@ describe("MCP Memory Integration Tests", () => {
             it("should search for memory (may need indexing time)", async () => {
                 const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         jsonrpc: "2.0",
                         method: "tools/call",
@@ -143,7 +151,7 @@ describe("MCP Memory Integration Tests", () => {
                 const deleteTestMemory = `Memory to delete ${uuidv4()}`
                 const createResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         jsonrpc: "2.0",
                         method: "tools/call",
@@ -159,7 +167,9 @@ describe("MCP Memory Integration Tests", () => {
                 await parseMcp(createResponse)
 
                 // Get the memory ID
-                const memoriesResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`)
+                const memoriesResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`, {
+                    headers: getAuthHeaders(false)
+                })
                 const memoriesData = await parseMemories(memoriesResponse)
                 const memoryToDelete = memoriesData.memories.find((m) => m.content === deleteTestMemory)
                 expect(memoryToDelete).toBeDefined()
@@ -167,7 +177,7 @@ describe("MCP Memory Integration Tests", () => {
                 // Delete the memory
                 const deleteResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         jsonrpc: "2.0",
                         method: "tools/call",
@@ -184,7 +194,9 @@ describe("MCP Memory Integration Tests", () => {
                 expect(deleteData.result.content?.[0]?.text).toContain(`Memory ${memoryToDelete!.id} deleted`)
 
                 // Verify deletion
-                const verifyResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`)
+                const verifyResponse = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/memories`, {
+                    headers: getAuthHeaders(false)
+                })
                 const verifyData = await parseMemories(verifyResponse)
                 const deletedMemory = verifyData.memories.find((m) => m.content === deleteTestMemory)
                 expect(deletedMemory).toBeUndefined()
@@ -196,7 +208,7 @@ describe("MCP Memory Integration Tests", () => {
         it("should search memories via REST API", async () => {
             const response = await fetch(`${BASE_URL}/api/search`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     query: "test",
                     namespaces: [TEST_NAMESPACE]
@@ -211,7 +223,7 @@ describe("MCP Memory Integration Tests", () => {
         it("should search specific namespace via REST", async () => {
             const response = await fetch(`${BASE_URL}/search/${TEST_NAMESPACE.replace(":", "/")}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     query: "integration"
                 })
@@ -228,7 +240,7 @@ describe("MCP Memory Integration Tests", () => {
 
             const response = await fetch(`${BASE_URL}/api/debug-vector`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     text: testText,
                     namespace: TEST_NAMESPACE
@@ -255,7 +267,7 @@ describe("MCP Memory Integration Tests", () => {
             for (const memory of memories) {
                 await fetch(`${BASE_URL}/${tempNamespace.replace(":", "/")}/sse`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         jsonrpc: "2.0",
                         method: "tools/call",
@@ -271,14 +283,16 @@ describe("MCP Memory Integration Tests", () => {
             }
 
             // Verify memories were created
-            const beforeResponse = await fetch(`${BASE_URL}/${tempNamespace.replace(":", "/")}/memories`)
+            const beforeResponse = await fetch(`${BASE_URL}/${tempNamespace.replace(":", "/")}/memories`, {
+                headers: getAuthHeaders(false)
+            })
             const beforeData = await parseMemories(beforeResponse)
             expect(beforeData.memories.length).toBe(3)
 
             // Delete the namespace
             const deleteResponse = await fetch(`${BASE_URL}/${tempNamespace.replace(":", "/")}/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",
@@ -295,7 +309,9 @@ describe("MCP Memory Integration Tests", () => {
             expect(deleteData.result.content?.[0]?.text).toContain(`Namespace ${tempNamespace} deleted with 3 memories`)
 
             // Verify namespace is empty
-            const afterResponse = await fetch(`${BASE_URL}/${tempNamespace.replace(":", "/")}/memories`)
+            const afterResponse = await fetch(`${BASE_URL}/${tempNamespace.replace(":", "/")}/memories`, {
+                headers: getAuthHeaders(false)
+            })
             const afterData = await parseMemories(afterResponse)
             expect(afterData.memories.length).toBe(0)
         })
@@ -305,7 +321,7 @@ describe("MCP Memory Integration Tests", () => {
         it("should find TypeScript memories in older namespaces", async () => {
             const response = await fetch(`${BASE_URL}/user/test/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",
@@ -330,7 +346,7 @@ describe("MCP Memory Integration Tests", () => {
         it("should search in specific older namespace", async () => {
             const response = await fetch(`${BASE_URL}/user/final-test-1750236996581/sse`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     jsonrpc: "2.0",
                     method: "tools/call",

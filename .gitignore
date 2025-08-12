@@ -180,3 +180,4 @@ dist
 *.bak
 mcp-config.json
 *.log
+.envrc
