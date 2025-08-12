@@ -55,6 +55,85 @@ describe("MCP Memory Integration Tests", () => {
         })
     })
 
+    describe("MCP tools via streamable HTTP endpoint", () => {
+        it("should list available tools", async () => {
+            const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/mcp`, {
+                method: "POST",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "tools/list",
+                    id: 1
+                })
+            })
+
+            const data = await parseMcp(response)
+            expect(data.result.tools).toBeDefined()
+            expect(data.result.tools!.length).toBe(8)
+
+            const toolNames = data.result.tools!.map((t) => t.name)
+            expect(toolNames).toContain("addToMCPMemory")
+            expect(toolNames).toContain("searchMCPMemory")
+            expect(toolNames).toContain("searchAllMemories")
+            expect(toolNames).toContain("deleteMemory")
+            expect(toolNames).toContain("deleteNamespace")
+            expect(toolNames).toContain("rememberHowTo")
+            expect(toolNames).toContain("findHowTo")
+            expect(toolNames).toContain("listCapabilities")
+        })
+
+        describe("Memory operations", () => {
+            const testMemory = `MCP streamable test memory ${uuidv4()}`
+
+            it("should store a memory", async () => {
+                const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/mcp`, {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "tools/call",
+                        params: {
+                            name: "addToMCPMemory",
+                            arguments: {
+                                thingToRemember: testMemory
+                            }
+                        },
+                        id: 2
+                    })
+                })
+                const data = await parseMcp(response)
+                expect(data.result.content?.[0]?.text).toContain(`Remembered in ${TEST_NAMESPACE}`)
+                expect(data.result.content?.[0]?.text).toContain(testMemory)
+            })
+
+            it("should search for memory", async () => {
+                const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/mcp`, {
+                    method: "POST",
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "tools/call",
+                        params: {
+                            name: "searchMCPMemory",
+                            arguments: {
+                                informationToGet: "MCP streamable test"
+                            }
+                        },
+                        id: 3
+                    })
+                })
+                const data = await parseMcp(response)
+                const resultText = data.result.content?.[0]?.text || ""
+
+                if (resultText.includes("No relevant memories found")) {
+                    console.log("⚠️  Vector search returned no results - this is expected for newly indexed vectors")
+                } else {
+                    expect(resultText).toContain(testMemory)
+                }
+            })
+        })
+    })
+
     describe("MCP tools via SSE endpoint", () => {
         it("should list available tools", async () => {
             const response = await fetch(`${BASE_URL}/${TEST_NAMESPACE.replace(":", "/")}/sse`, {

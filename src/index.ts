@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { MyMCP } from "./mcp"
 import { MCPSSEServer } from "./mcp-sse"
+import { Memory } from "./mcp-modern"
 import {
     getAllMemoriesFromD1,
     initializeDatabase,
@@ -637,6 +638,69 @@ app.all("/all/sse", async (c) => {
     } catch (error) {
         console.error("MCP error:", error)
         return new Response("Internal Server Error: MCP failed", { status: 500 })
+    }
+})
+
+// Handle MCP streamable HTTP endpoint for user namespace
+app.all("/user/:userId/mcp", async (c) => {
+    const userId = c.req.param("userId")
+    if (!userId) {
+        console.error("No userId parameter found")
+        return new Response("Bad Request: Missing userId", { status: 400 })
+    }
+
+    console.log(`MCP streamable HTTP request for user: ${userId}`)
+
+    try {
+        // Set props for the McpAgent
+        const ctx = c.executionCtx
+        ctx.props = { userId: `user:${userId}` }
+
+        // Use Memory.serve() for streamable HTTP transport
+        return Memory.serve(`/user/${userId}/mcp`).fetch(c.req.raw, c.env, ctx)
+    } catch (error) {
+        console.error("Error in MCP streamable HTTP endpoint:", error)
+        return new Response(`Internal Server Error: ${error}`, { status: 500 })
+    }
+})
+
+// Handle MCP streamable HTTP endpoint for project namespace
+app.all("/project/:projectId/mcp", async (c) => {
+    const projectId = c.req.param("projectId")
+    if (!projectId) {
+        console.error("No projectId parameter found")
+        return new Response("Bad Request: Missing projectId", { status: 400 })
+    }
+
+    console.log(`MCP streamable HTTP request for project: ${projectId}`)
+
+    try {
+        // Set props for the McpAgent
+        const ctx = c.executionCtx
+        ctx.props = { userId: `project:${projectId}` }
+
+        // Use Memory.serve() for streamable HTTP transport
+        return Memory.serve(`/project/${projectId}/mcp`).fetch(c.req.raw, c.env, ctx)
+    } catch (error) {
+        console.error("Error in MCP streamable HTTP endpoint:", error)
+        return new Response(`Internal Server Error: ${error}`, { status: 500 })
+    }
+})
+
+// Handle MCP streamable HTTP endpoint for all namespaces
+app.all("/all/mcp", async (c) => {
+    console.log("MCP streamable HTTP request for all namespaces")
+
+    try {
+        // Set props for the McpAgent
+        const ctx = c.executionCtx
+        ctx.props = { userId: "all" }
+
+        // Use Memory.serve() for streamable HTTP transport
+        return Memory.serve("/all/mcp").fetch(c.req.raw, c.env, ctx)
+    } catch (error) {
+        console.error("Error in MCP streamable HTTP endpoint:", error)
+        return new Response(`Internal Server Error: ${error}`, { status: 500 })
     }
 })
 

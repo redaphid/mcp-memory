@@ -57,10 +57,8 @@ export async function storeMemoryInD1(
     env: Env,
     memoryId = uuidv4()
 ) {
-    const userId = namespace.startsWith("user:") ? namespace.substring(5) : uuidv4()
-    
-    const stmt = env.DB.prepare("INSERT INTO memories (id, userId, namespace, content) VALUES (?, ?, ?, ?)")
-    await stmt.bind(memoryId, userId, namespace, content).run()
+    const stmt = env.DB.prepare("INSERT INTO memories (id, namespace, content) VALUES (?, ?, ?)")
+    await stmt.bind(memoryId, namespace, content).run()
     
     return memoryId
 }
