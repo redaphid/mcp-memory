@@ -56,7 +56,7 @@ export const addToMCPMemoryHandler = async (
         content: [
             {
                 type: "text" as const,
-                text: `Remembered in ${targetNamespace}: ${thingToRemember}`
+                text: `Remembered in ${targetNamespace}: ${thingToRemember}\nMemory ID: ${memoryId}`
             }
         ]
     }
@@ -88,28 +88,19 @@ export const searchMCPMemoryHandler = async (
     const searchTargetNamespace = searchNamespace || context.namespace
     const memories = await searchMemories(informationToGet, searchTargetNamespace, context.env)
 
+    const results = memories.map((m) => ({
+        id: m.id,
+        content: m.content,
+        score: m.score
+    }))
 
-    if (memories.length > 0) {
-        return {
-            content: [
-                {
-                    type: "text" as const,
-                    text: `Found memories in ${searchTargetNamespace}:\n` +
-                        memories
-                            .map((m) => `${m.content} (score: ${m.score.toFixed(4)})`)
-                            .join("\n")
-                }
-            ]
-        }
-    } else {
-        return {
-            content: [
-                {
-                    type: "text" as const,
-                    text: `No relevant memories found in ${searchTargetNamespace}.`
-                }
-            ]
-        }
+    return {
+        content: [
+            {
+                type: "text" as const,
+                text: JSON.stringify(results, null, 2)
+            }
+        ]
     }
 }
 
@@ -150,6 +141,7 @@ export const searchAllMemoriesHandler = async (
                         allResults.push({
                             namespace,
                             memories: memories.map((m) => ({
+                                id: m.id,
                                 content: m.content,
                                 score: m.score
                             }))
@@ -183,7 +175,7 @@ export const searchAllMemoriesHandler = async (
                                 (result) =>
                                     `\nIn ${result.namespace}:\n` +
                                     result.memories
-                                        .map((m) => `${m.content} (score: ${m.score.toFixed(4)})`)
+                                        .map((m) => `[ID: ${m.id}] ${m.content} (score: ${m.score.toFixed(4)})`)
                                         .join("\n")
                             )
                             .join("\n")
