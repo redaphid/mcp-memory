@@ -8,6 +8,7 @@
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev --experimental-vectorize-bind-to-prod",
 		"format": "biome format --write",
+		"knip": "knip",
 		"lint:fix": "biome lint --fix",
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
@@ -16,25 +17,21 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
 		"@cloudflare/workers-types": "^4.20250421.0",
 		"@types/node": "^22.14.1",
-		"@types/react": "^18.2.0",
-		"@types/react-dom": "^18.2.0",
 		"@types/uuid": "^10.0.0",
 		"@vitest/ui": "^3.2.4",
 		"happy-dom": "^18.0.1",
+		"knip": "^5.70.2",
 		"typescript": "^5.5.2",
 		"vitest": "^3.2.4",
-		"workers-mcp": "^0.1.0-3",
 		"wrangler": "^4.6.0"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.7.0",
 		"agents": "^0.2.26",
-		"eventsource": "^4.0.0",
 		"hono": "^4.7.4",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
 		"uuid": "^11.1.0",
 		"zod": "^3.24.2"
 	}

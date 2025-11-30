@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "coding-philosophy": {
+      "type": "http",
+      "url": "https://mcp-memory.loqwai.workers.dev/project/coding-philosophy/mcp",
+      "headers": {
+        "CF-Access-Client-Id": "${CODING_PHILOSOPHY_CF_ACCESS_CLIENT_ID}",
+        "CF-Access-Client-Secret": "${CODING_PHILOSOPHY_CF_ACCESS_CLIENT_SECRET}"
+      }
+    }
+  }
+}
