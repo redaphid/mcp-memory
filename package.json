@@ -13,11 +13,15 @@
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
 		"test": "vitest --run",
+		"test:unit": "vitest --run",
+		"test:integration": "vitest --run --config vitest.config.integration.ts",
+		"test:all": "npm run test:unit && npm run test:integration",
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@cloudflare/vitest-pool-workers": "^0.10.11",
 		"@cloudflare/workers-types": "^4.20251128.0",
 		"@types/node": "^22.14.1",
 		"@types/uuid": "^10.0.0",
