@@ -54,17 +54,35 @@ export async function searchMemories(
       returnMetadata: "all",
     })
 
-
     if (!results.matches || results.matches.length === 0) return []
 
-    return results.matches
+    const filtered = results.matches
       .filter(match => match.score > MINIMUM_SIMILARITY_SCORE)
-      .map(match => ({
-        content: match.metadata?.content || `Missing memory content (ID: ${match.id})`,
-        score: match.score || 0,
-        id: match.id,
-      }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+
+    if (filtered.length === 0) return []
+
+    // Fetch timestamps from D1
+    const ids = filtered.map(m => m.id)
+    const placeholders = ids.map(() => '?').join(',')
+    const dbResults = await env.DB.prepare(
+      `SELECT id, created_at FROM memories WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+    ).bind(...ids).all()
+
+    const timestampMap = new Map<string, string>()
+    if (dbResults.results) {
+      for (const row of dbResults.results) {
+        const r = row as { id: string; created_at: string }
+        timestampMap.set(r.id, r.created_at)
+      }
+    }
+
+    return filtered.map(match => ({
+      content: match.metadata?.content || `Missing memory content (ID: ${match.id})`,
+      score: match.score || 0,
+      id: match.id,
+      created_at: timestampMap.get(match.id) || null,
+    }))
   } catch (error) {
     console.error(`Vector search failed for namespace ${userId}:`, error)
     return []

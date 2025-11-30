@@ -1,11 +1,9 @@
 import { Hono } from "hono"
 import { MemoryMCP } from "./mcp"
 import {
-    getAllMemoriesFromD1,
     initializeDatabase,
     deleteMemoryFromD1,
-    updateMemoryInD1,
-    storeMemoryInD1
+    updateMemoryInD1
 } from "./utils/db"
 import { deleteVectorById, updateMemoryVector, searchMemories, storeMemory } from "./utils/vectorize"
 
@@ -76,44 +74,6 @@ app.get("/health", async (c) => {
             ...health,
             error: error instanceof Error ? error.message : "Unknown error"
         }, 503)
-    }
-})
-
-// Test endpoint to create sample data
-app.post("/api/test-data", async (c) => {
-    try {
-        // Create some test memories
-        const testMemories = [
-            { content: "User Alice loves JavaScript and React", namespace: "user:alice" },
-            { content: "User Bob prefers Python and Django", namespace: "user:bob" },
-            { content: "Project frontend uses React and TypeScript", namespace: "project:frontend" },
-            { content: "Authentication system implemented with JWT", namespace: "user:alice" },
-            { content: "Database migration completed successfully", namespace: "project:backend" }
-        ]
-
-        for (const memory of testMemories) {
-            // Store in D1
-            const memoryId = await storeMemoryInD1(memory.content, memory.namespace, c.env)
-
-            // Store in Vectorize
-            try {
-                await storeMemory(memory.content, memory.namespace, c.env)
-            } catch (vectorError) {
-                console.error("Failed to store in Vectorize:", vectorError)
-            }
-        }
-
-        return c.json({ success: true, message: "Test data created successfully" })
-    } catch (error) {
-        console.error("Error creating test data:", error)
-        return c.json(
-            {
-                success: false,
-                error: "Failed to create test data",
-                details: error instanceof Error ? error.message : String(error)
-            },
-            500
-        )
     }
 })
 
@@ -529,125 +489,6 @@ app.all("/all/mcp", async (c) => {
 // Serve admin page
 app.get("/admin", async (c) => {
     return c.html(await c.env.ASSETS.fetch("https://mcp-memory.loqwai.workers.dev/admin.html").then((r) => r.text()))
-})
-
-// Test endpoint to check database structure
-app.get("/api/db-info", async (c) => {
-    try {
-        // Get table info
-        const tableInfo = await c.env.DB.prepare("PRAGMA table_info(memories)").all()
-
-        // Get count of memories
-        const count = await c.env.DB.prepare("SELECT COUNT(*) as count FROM memories").first()
-
-        // Get sample data
-        const sample = await c.env.DB.prepare("SELECT * FROM memories LIMIT 5").all()
-
-        return c.json({
-            success: true,
-            tableInfo: tableInfo.results,
-            count: (count as any)?.count || 0,
-            sample: sample.results
-        })
-    } catch (error) {
-        console.error("Error getting database info:", error)
-        return c.json(
-            {
-                success: false,
-                error: "Failed to get database info",
-                details: error instanceof Error ? error.message : String(error)
-            },
-            500
-        )
-    }
-})
-
-// Simple test endpoint to add a basic memory
-app.post("/api/simple-test", async (c) => {
-    try {
-        const memoryId = crypto.randomUUID()
-        const content = "This is a simple test memory"
-        const namespace = "user:test"
-
-        // Try to insert directly
-        const result = await c.env.DB.prepare("INSERT INTO memories (id, content, namespace) VALUES (?, ?, ?)")
-            .bind(memoryId, content, namespace)
-            .run()
-
-
-        return c.json({
-            success: true,
-            message: "Simple test memory created",
-            memoryId,
-            result
-        })
-    } catch (error) {
-        console.error("Error creating simple test:", error)
-        return c.json(
-            {
-                success: false,
-                error: "Failed to create simple test",
-                details: error instanceof Error ? error.message : String(error)
-            },
-            500
-        )
-    }
-})
-
-// Debug endpoint for vectorize
-app.post("/api/debug-vector", async (c) => {
-    try {
-        const { text, namespace = "debug" } = await c.req.json()
-
-        // Test embedding generation
-        const embeddings = (await c.env.AI.run("@cf/baai/bge-m3", { text })) as any
-        const values = embeddings.data[0]
-
-        if (!values) {
-            return c.json({ error: "Failed to generate embeddings" }, 500)
-        }
-
-        // Test vector storage
-        const vectorId = crypto.randomUUID()
-        await c.env.VECTORIZE.upsert([
-            {
-                id: vectorId,
-                values,
-                namespace,
-                metadata: { content: text }
-            }
-        ])
-
-        // Test vector search
-        const searchResults = await c.env.VECTORIZE.query(values, {
-            namespace,
-            topK: 5,
-            returnMetadata: "all"
-        })
-
-        return c.json({
-            success: true,
-            vectorId,
-            embeddingLength: values.length,
-            searchResults: {
-                count: searchResults.matches?.length || 0,
-                matches: searchResults.matches?.map((m) => ({
-                    id: m.id,
-                    score: m.score,
-                    content: m.metadata?.content
-                }))
-            }
-        })
-    } catch (error) {
-        console.error("Debug vector error:", error)
-        return c.json(
-            {
-                error: "Vector operation failed",
-                details: error instanceof Error ? error.message : String(error)
-            },
-            500
-        )
-    }
 })
 
 // Fallback to static assets

@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { McpAgent } from "agents/mcp"
 import { z } from "zod"
-import { storeMemoryInD1, deleteMemoryFromD1 } from "./utils/db"
-import { searchMemories, storeMemory, deleteVectorById } from "./utils/vectorize"
+import { storeMemoryInD1, deleteMemoryFromD1, updateMemoryInD1 } from "./utils/db"
+import { searchMemories, storeMemory, deleteVectorById, updateMemoryVector } from "./utils/vectorize"
 import { version } from "../package.json"
 
 type MemoryMCPProps = {
@@ -127,7 +127,7 @@ export class MemoryMCP extends McpAgent<Env, {}, MemoryMCPProps> {
                         content: [{
                             type: "text",
                             text: `Found memories in ${targetNamespace}:\n` +
-                                  memories.map(m => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n")
+                                  memories.map(m => `[${m.id}] ${m.content} (score: ${m.score.toFixed(4)}${m.created_at ? `, ${m.created_at}` : ''})`).join("\n")
                         }]
                     }
                 } catch (error) {
@@ -159,7 +159,7 @@ export class MemoryMCP extends McpAgent<Env, {}, MemoryMCPProps> {
                             if (memories.length > 0) {
                                 allResults.push({
                                     namespace,
-                                    memories: memories.map(m => ({ content: m.content, score: m.score }))
+                                    memories: memories.map(m => ({ id: m.id, content: m.content, score: m.score, created_at: m.created_at }))
                                 })
                             }
                         } catch (error) {
@@ -177,9 +177,43 @@ export class MemoryMCP extends McpAgent<Env, {}, MemoryMCPProps> {
                         text: "Found memories across all namespaces:\n" +
                               allResults.map(result =>
                                   `\nIn ${result.namespace}:\n` +
-                                  result.memories.map(m => `${m.content} (score: ${m.score.toFixed(4)})`).join("\n")
+                                  result.memories.map(m => `[${m.id}] ${m.content} (score: ${m.score.toFixed(4)}${m.created_at ? `, ${m.created_at}` : ''})`).join("\n")
                               ).join("\n")
                     }]
+                }
+            }
+        )
+
+        // Add update memory tool
+        this.server.tool(
+            "updateMemory",
+            "This tool updates an existing memory's content. Use when you need to correct or improve a memory without deleting and recreating it.",
+            {
+                memoryId: z.string().describe("The ID of the memory to update"),
+                newContent: z.string().describe("The new content for the memory"),
+                namespace: z
+                    .string()
+                    .optional()
+                    .describe(
+                        "Optional namespace (e.g., 'user:alice', 'project:frontend'). If not provided, uses the current server namespace."
+                    )
+            },
+            async ({ memoryId, newContent, namespace }: { memoryId: string; newContent: string; namespace?: string }) => {
+                try {
+                    const targetNamespace = namespace || this.namespace
+
+                    // Update in both D1 and Vectorize
+                    await updateMemoryInD1(memoryId, targetNamespace, newContent, env)
+                    await updateMemoryVector(memoryId, newContent, targetNamespace, env)
+
+                    return {
+                        content: [{ type: "text", text: `Memory ${memoryId} updated in ${targetNamespace}` }]
+                    }
+                } catch (error) {
+                    console.error("Error in updateMemory:", error)
+                    return {
+                        content: [{ type: "text", text: `Failed to update memory: ${error}` }]
+                    }
                 }
             }
         )
@@ -200,19 +234,62 @@ export class MemoryMCP extends McpAgent<Env, {}, MemoryMCPProps> {
             async ({ memoryId, namespace }: { memoryId: string; namespace?: string }) => {
                 try {
                     const targetNamespace = namespace || this.namespace
-                    
+
+                    // Fetch the memory content before deleting for confirmation
+                    const memory = await env.DB.prepare(
+                        "SELECT content FROM memories WHERE id = ? AND namespace = ? AND deleted_at IS NULL"
+                    ).bind(memoryId, targetNamespace).first<{ content: string }>()
+
+                    const preview = memory?.content
+                        ? memory.content.substring(0, 100) + (memory.content.length > 100 ? '...' : '')
+                        : '(content not found)'
+
                     // Delete from both D1 and Vectorize
                     await deleteMemoryFromD1(memoryId, targetNamespace, env)
                     await deleteVectorById(memoryId, targetNamespace, env)
-                    
-                    
+
                     return {
-                        content: [{ type: "text", text: `Memory ${memoryId} deleted from ${targetNamespace}` }]
+                        content: [{ type: "text", text: `Deleted from ${targetNamespace}: "${preview}"` }]
                     }
                 } catch (error) {
                     console.error("Error in deleteMemory:", error)
                     return {
                         content: [{ type: "text", text: `Failed to delete memory: ${error}` }]
+                    }
+                }
+            }
+        )
+
+        // Add list namespaces tool
+        this.server.tool(
+            "listNamespaces",
+            "This tool lists all available namespaces with memory counts. Use to discover what namespaces exist.",
+            {},
+            async () => {
+                try {
+                    const result = await env.DB.prepare(
+                        `SELECT namespace, COUNT(*) as count
+                         FROM memories
+                         WHERE deleted_at IS NULL
+                         GROUP BY namespace
+                         ORDER BY count DESC`
+                    ).all()
+
+                    if (!result.results || result.results.length === 0) {
+                        return { content: [{ type: "text", text: "No namespaces found." }] }
+                    }
+
+                    const namespaces = result.results.map((row: any) =>
+                        `${row.namespace}: ${row.count} memories`
+                    ).join("\n")
+
+                    return {
+                        content: [{ type: "text", text: `Available namespaces:\n${namespaces}` }]
+                    }
+                } catch (error) {
+                    console.error("Error in listNamespaces:", error)
+                    return {
+                        content: [{ type: "text", text: `Failed to list namespaces: ${error}` }]
                     }
                 }
             }
@@ -232,15 +309,13 @@ export class MemoryMCP extends McpAgent<Env, {}, MemoryMCPProps> {
                         "SELECT id FROM memories WHERE namespace = ? AND deleted_at IS NULL"
                     ).bind(namespace).all()
                     
-                    // Delete all vectors for this namespace
+                    // Delete all vectors for this namespace in bulk
                     if (memories.results && memories.results.length > 0) {
-                        for (const row of memories.results) {
-                            const memoryId = (row as any).id
-                            try {
-                                await deleteVectorById(memoryId, namespace, env)
-                            } catch (error) {
-                                console.error(`Error deleting vector ${memoryId}:`, error)
-                            }
+                        const memoryIds = memories.results.map((row: any) => row.id)
+                        try {
+                            await env.VECTORIZE.deleteByIds(memoryIds)
+                        } catch (error) {
+                            console.error(`Error bulk deleting vectors for namespace ${namespace}:`, error)
                         }
                     }
                     
