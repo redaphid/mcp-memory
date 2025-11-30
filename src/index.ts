@@ -1,6 +1,5 @@
 import { Hono } from "hono"
-import { MyMCP } from "./mcp"
-import { MCPSSEServer } from "./mcp-sse"
+import { MemoryMCP } from "./mcp"
 import {
     getAllMemoriesFromD1,
     initializeDatabase,
@@ -507,137 +506,24 @@ app.delete("/api/memories/:memoryId", async (c) => {
     }
 })
 
-// Handle MCP SSE endpoint for user namespace
-app.all("/user/:userId/sse", async (c) => {
-    const userId = c.req.param("userId")
-    if (!userId) {
-        console.error("No userId parameter found")
-        return new Response("Bad Request: Missing userId", { status: 400 })
-    }
+// Create streaming HTTP handlers for MCP
+const userMcpHandler = MemoryMCP.serve("/user/:userId/mcp", { binding: "MCP_OBJECT" })
+const projectMcpHandler = MemoryMCP.serve("/project/:projectId/mcp", { binding: "MCP_OBJECT" })
+const allMcpHandler = MemoryMCP.serve("/all/mcp", { binding: "MCP_OBJECT" })
 
-    const namespace = `user:${userId}`
-    const mcpServer = new MCPSSEServer(namespace, c.env)
-
-    try {
-        if (c.req.method === "OPTIONS") {
-            return new Response(null, {
-                status: 200,
-                headers: {
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
-                    "Access-Control-Max-Age": "86400"
-                }
-            })
-        }
-        
-        if (c.req.method === "GET") return await mcpServer.handleSSEConnection()
-        
-        if (c.req.method === "POST") {
-            const body = await c.req.json()
-            const response = await mcpServer.handleJSONRPCRequest(body)
-            return new Response(JSON.stringify(response), {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type"
-                }
-            })
-        }
-        
-        return new Response("Method Not Allowed", { status: 405 })
-    } catch (error) {
-        console.error("MCP error:", error)
-        return new Response("Internal Server Error: MCP failed", { status: 500 })
-    }
+// Streaming HTTP MCP endpoint for user namespace
+app.all("/user/:userId/mcp", async (c) => {
+    return userMcpHandler.fetch(c.req.raw, c.env, c.executionCtx)
 })
 
-// Handle MCP SSE endpoint for project namespace
-app.all("/project/:projectId/sse", async (c) => {
-    const projectId = c.req.param("projectId")
-
-    if (!projectId) {
-        return new Response("Bad Request: Missing projectId", { status: 400 })
-    }
-
-    const namespace = `project:${projectId}`
-    const mcpServer = new MCPSSEServer(namespace, c.env)
-
-    try {
-        if (c.req.method === "OPTIONS") {
-            return new Response(null, {
-                status: 200,
-                headers: {
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
-                    "Access-Control-Max-Age": "86400"
-                }
-            })
-        }
-        
-        if (c.req.method === "GET") return await mcpServer.handleSSEConnection()
-        
-        if (c.req.method === "POST") {
-            const body = await c.req.json()
-            const response = await mcpServer.handleJSONRPCRequest(body)
-            return new Response(JSON.stringify(response), {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type"
-                }
-            })
-        }
-        
-        return new Response("Method Not Allowed", { status: 405 })
-    } catch (error) {
-        console.error("MCP error:", error)
-        return new Response("Internal Server Error: MCP failed", { status: 500 })
-    }
+// Streaming HTTP MCP endpoint for project namespace
+app.all("/project/:projectId/mcp", async (c) => {
+    return projectMcpHandler.fetch(c.req.raw, c.env, c.executionCtx)
 })
 
-// Handle MCP SSE endpoint for organization-wide namespace
-app.all("/all/sse", async (c) => {
-
-    const namespace = "all"
-    const mcpServer = new MCPSSEServer(namespace, c.env)
-
-    try {
-        if (c.req.method === "OPTIONS") {
-            return new Response(null, {
-                status: 200,
-                headers: {
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization",
-                    "Access-Control-Max-Age": "86400"
-                }
-            })
-        }
-        
-        if (c.req.method === "GET") return await mcpServer.handleSSEConnection()
-        
-        if (c.req.method === "POST") {
-            const body = await c.req.json()
-            const response = await mcpServer.handleJSONRPCRequest(body)
-            return new Response(JSON.stringify(response), {
-                headers: {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type"
-                }
-            })
-        }
-        
-        return new Response("Method Not Allowed", { status: 405 })
-    } catch (error) {
-        console.error("MCP error:", error)
-        return new Response("Internal Server Error: MCP failed", { status: 500 })
-    }
+// Streaming HTTP MCP endpoint for organization-wide namespace
+app.all("/all/mcp", async (c) => {
+    return allMcpHandler.fetch(c.req.raw, c.env, c.executionCtx)
 })
 
 // Serve admin page
@@ -771,7 +657,7 @@ app.get("*", async (c) => {
 
 export default app
 
-export { MyMCP }
+export { MemoryMCP }
 
 // Scheduled cron job for incremental vector backups
 export const scheduled: ExportedHandlerScheduledHandler<Env> = async (event, env, ctx) => {

@@ -5,16 +5,21 @@ import { storeMemoryInD1, deleteMemoryFromD1 } from "./utils/db"
 import { searchMemories, storeMemory, deleteVectorById } from "./utils/vectorize"
 import { version } from "../package.json"
 
-type MyMCPProps = {
+type MemoryMCPProps = {
     namespace: string // e.g., "user:alice", "project:frontend", "all"
     namespaceType: "user" | "project" | "all"
 }
 
-export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
+export class MemoryMCP extends McpAgent<Env, {}, MemoryMCPProps> {
     server = new McpServer({
         name: "MCP Memory",
         version
     })
+
+    // Get the namespace from props or fall back to the Durable Object's name
+    get namespace(): string {
+        return this.props?.namespace || this.name || "default"
+    }
 
     async init() {
         const env = this.env as Env
@@ -55,7 +60,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             },
             async ({ thingToRemember, namespace }: { thingToRemember: string; namespace?: string }) => {
                 try {
-                    const targetNamespace = namespace || this.props.namespace
+                    const targetNamespace = namespace || this.namespace
                     const memoryId = await storeMemory(thingToRemember, targetNamespace, env)
                     await storeMemoryInD1(thingToRemember, targetNamespace, env, memoryId)
 
@@ -111,7 +116,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             },
             async ({ informationToGet, namespace }: { informationToGet: string; namespace?: string }) => {
                 try {
-                    const targetNamespace = namespace || this.props.namespace
+                    const targetNamespace = namespace || this.namespace
 
                     const memories = await searchMemories(informationToGet, targetNamespace, env)
 
@@ -194,7 +199,7 @@ export class MyMCP extends McpAgent<Env, {}, MyMCPProps> {
             },
             async ({ memoryId, namespace }: { memoryId: string; namespace?: string }) => {
                 try {
-                    const targetNamespace = namespace || this.props.namespace
+                    const targetNamespace = namespace || this.namespace
                     
                     // Delete from both D1 and Vectorize
                     await deleteMemoryFromD1(memoryId, targetNamespace, env)

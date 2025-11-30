@@ -13,10 +13,10 @@
   "migrations": [
     {
       "new_sqlite_classes": [
-        "MyMCP"
+        "MemoryMCP"
       ],
       "tag": "v1"
-    },
+    }
   ],
   "unsafe": {
     "bindings": [
@@ -41,7 +41,7 @@
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "MyMCP",
+        "class_name": "MemoryMCP",
         "name": "MCP_OBJECT"
       }
     ]
