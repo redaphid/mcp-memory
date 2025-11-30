@@ -68,7 +68,7 @@ describe('storeMemoryInD1', () => {
     
     it('should call DB.prepare with INSERT query', () => {
       expect(mockEnv.DB.prepare).toHaveBeenCalledWith(
-        'INSERT INTO memories (id, userId, namespace, content) VALUES (?, ?, ?, ?)'
+        'INSERT INTO memories (id, namespace, content) VALUES (?, ?, ?)'
       )
     })
   })
